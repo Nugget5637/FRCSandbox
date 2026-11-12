@@ -90,7 +90,7 @@ Named areas with no physics, used for display now and for future rules: `{ "id":
 }
 ```
 
-Shapes are `{ "kind": "sphere", "radius": r }` or `{ "kind": "box", "size": [x, y, z] }`. `restitution` (bounciness) is between 0 and 1.
+Shapes are `{ "kind": "sphere", "radius": r }` or `{ "kind": "box", "size": [x, y, z] }`. `friction` and `restitution` (bounciness, 0 to 1) describe the piece's own surface; see [Surfaces and carpet](#surfaces-and-carpet). `rollingResistance` is optional.
 
 ### Spawn areas
 
@@ -105,6 +105,45 @@ Shapes are `{ "kind": "sphere", "radius": r }` or `{ "kind": "box", "size": [x, 
 ```
 
 Pieces fill a grid inside the box, one layer at a time from the bottom. `jitter` adds a seeded random offset in meters, so layouts vary by seed but replay exactly.
+
+## Surfaces and carpet
+
+Every surface has its own `friction` and `restitution`. When two surfaces touch, the engine combines them with the **geometric mean**:
+
+```text
+friction    = sqrt(a.friction    * b.friction)
+restitution = sqrt(a.restitution * b.restitution)
+```
+
+So a game piece only needs its own values. The same piece type behaves correctly against the carpet, field structures, robots, and other pieces in any pack.
+
+| Surface         | Set by                                 | Default                                                                     |
+| --------------- | -------------------------------------- | --------------------------------------------------------------------------- |
+| Carpet          | `field.carpet`                         | Standard FRC carpet (below)                                                 |
+| Perimeter walls | `field.wallSurface`                    | friction 0.4, restitution 0.5                                               |
+| Each obstacle   | `obstacles[].surface`                  | friction 0.4, restitution 0.5                                               |
+| Each piece type | `pieceTypes[].friction`, `restitution` | Required                                                                    |
+| Robots          | Engine                                 | friction 0, restitution 0.2 (robots are driven by velocity, not wheel grip) |
+
+### Carpet
+
+```json
+"carpet": { "friction": 0.8, "restitution": 0.4, "rollingResistance": 0.08 }
+```
+
+Omit `carpet` to use the standard FRC carpet: Shaw Philadelphia Commercial Neyland II 20, used on official fields from 2024 through 2027. Its values are estimates, because FIRST publishes no measurements.
+
+`rollingResistance` is what stops a rolling ball. The physics engine has no rolling friction, so without it a ball would roll on carpet almost forever. Each step, every round piece touching the carpet slows by `rollingResistance × 9.81 m/s²`. A ball rolling at speed `v` stops after about `v² / (2 × rollingResistance × 9.81)` meters. This applies automatically to every sphere piece in every pack. Box pieces slide instead, and their friction against the carpet stops them.
+
+A piece type can set its own `rollingResistance` when it has been measured on carpet, for example a soft ball that rolls a shorter distance than the carpet default.
+
+### Measuring surfaces
+
+Rough measurements beat guesses. On real field carpet:
+
+- **Friction:** tilt a carpet-covered board until the piece starts to slide. The combined friction is `tan(angle)`, and the piece's own value is `combined² / carpet friction`.
+- **Rolling resistance:** roll a ball off a ramp onto flat carpet. With speed `v` at the bottom of the ramp and rolling distance `d`, `rollingResistance = v² / (2 × 9.81 × d)`.
+- **Restitution:** drop the piece from height `h0` onto carpet and measure the bounce height `h1`. The combined value is `sqrt(h1 / h0)`.
 
 ## Scoring rules
 

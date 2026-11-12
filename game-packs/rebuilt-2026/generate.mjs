@@ -242,6 +242,8 @@ const pack = {
   field: {
     size: [L, W],
     wallHeight: r(20 * IN), // guardrail height (Manual 5.2); alliance walls are taller
+    // Manual 5.2: Shaw Philadelphia Commercial Neyland II 20, the standard FRC carpet.
+    // Omitting `carpet` uses the engine's FRC_CARPET estimates for that exact carpet.
     obstacles,
     goals,
     zones,
@@ -252,7 +254,9 @@ const pack = {
       name: 'FUEL',
       shape: { kind: 'sphere', radius: r(FUEL_RADIUS) },
       mass: 0.215, // Manual: 0.203-0.227 kg; midpoint
-      friction: 0.7, // ASSUMPTION: foam on carpet
+      // The fuel's own surface. The engine combines it with the carpet (and with
+      // anything else it touches), so these are not foam-on-carpet values.
+      friction: 0.7, // ASSUMPTION: high-density foam
       restitution: 0.35, // ASSUMPTION: high-density foam
     },
   ],

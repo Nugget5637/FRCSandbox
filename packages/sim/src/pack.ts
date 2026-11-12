@@ -19,6 +19,35 @@ const nonNegative = z.number().nonnegative();
 const vec3 = z.tuple([z.number(), z.number(), z.number()]);
 const size3 = z.tuple([positive, positive, positive]);
 
+/**
+ * Surface material. When two surfaces touch, the engine combines their values
+ * with the geometric mean: friction = sqrt(a.friction * b.friction), and the
+ * same for restitution. A piece therefore interacts correctly with carpet,
+ * structures, robots, and other pieces from its own values alone.
+ */
+const SurfaceSchema = z.object({
+  friction: nonNegative,
+  restitution: z.number().min(0).max(1),
+});
+export type Surface = z.output<typeof SurfaceSchema>;
+
+/**
+ * Carpet adds rolling resistance: the deceleration of a round piece rolling on
+ * it, as a fraction of gravity (stopping distance = v^2 / (2 * c * g)).
+ */
+const CarpetSchema = SurfaceSchema.extend({ rollingResistance: nonNegative });
+export type Carpet = z.output<typeof CarpetSchema>;
+
+/**
+ * Standard FRC field carpet (Shaw Philadelphia Commercial Neyland II 20, low
+ * pile, used 2024-2027). FIRST publishes no friction measurements, so these
+ * are estimates; see docs/PACK_FORMAT.md for how to measure them.
+ */
+export const FRC_CARPET: Carpet = { friction: 0.8, restitution: 0.4, rollingResistance: 0.08 };
+
+/** Default for walls and field structures (polycarbonate, aluminum, steel). */
+export const DEFAULT_STRUCTURE_SURFACE: Surface = { friction: 0.4, restitution: 0.5 };
+
 export const AllianceSchema = z.enum(['red', 'blue']);
 export type Alliance = z.output<typeof AllianceSchema>;
 
@@ -54,8 +83,14 @@ const PieceTypeSchema = z.object({
   name: z.string().min(1),
   shape: PieceShapeSchema,
   mass: positive,
+  /** The piece's own surface. Combined with whatever it touches. */
   friction: nonNegative,
   restitution: z.number().min(0).max(1),
+  /**
+   * Optional measured rolling resistance for this piece on the field carpet.
+   * Omit it to use the carpet's value, which applies to every round piece.
+   */
+  rollingResistance: nonNegative.optional(),
 });
 
 const GoalSchema = z.object({
@@ -109,7 +144,20 @@ export const GamePackSchema = z
       /** Field length (x) and width (y). */
       size: z.tuple([positive, positive]),
       wallHeight: positive,
-      obstacles: z.array(z.object({ id, shape: ObstacleShapeSchema })).default([]),
+      /** Floor material. Defaults to standard FRC carpet. */
+      carpet: CarpetSchema.default(FRC_CARPET),
+      /** Material of the perimeter walls. */
+      wallSurface: SurfaceSchema.default(DEFAULT_STRUCTURE_SURFACE),
+      obstacles: z
+        .array(
+          z.object({
+            id,
+            shape: ObstacleShapeSchema,
+            /** Defaults to DEFAULT_STRUCTURE_SURFACE. */
+            surface: SurfaceSchema.optional(),
+          }),
+        )
+        .default([]),
       goals: z.array(GoalSchema).min(1),
       /** Named areas used for display and future rules. They have no physics. */
       zones: z.array(ZoneSchema).default([]),

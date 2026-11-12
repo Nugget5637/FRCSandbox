@@ -9,6 +9,8 @@
 export { ENGINE_VERSION, SIM_HZ, SIM_STEP_SECONDS, UNITS } from './constants';
 export {
   AllianceSchema,
+  DEFAULT_STRUCTURE_SURFACE,
+  FRC_CARPET,
   GamePackError,
   GamePackSchema,
   boxContains,
@@ -16,6 +18,8 @@ export {
   pointsFor,
   type Alliance,
   type Box,
+  type Carpet,
+  type Surface,
   type GamePack,
   type PieceShape,
   type ScoringRule,
@@ -41,6 +45,7 @@ export { getMechanic, knownMechanicIds, type MechanicModule } from './mechanics'
 export {
   GRAVITY,
   Simulation,
+  combineSurfaces,
   createSimulation,
   initPhysics,
   type PieceSnapshot,

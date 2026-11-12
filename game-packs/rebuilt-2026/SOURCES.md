@@ -31,17 +31,18 @@ The official field CAD and dimension drawings were not used. They should be the 
 
 ## Assumptions and approximations
 
-| Item                     | What the pack does                                                                 | Why                                                           |
-| ------------------------ | ---------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| Hub opening              | Square instead of hexagonal                                                        | The format only has boxes                                     |
-| Hub net and funnel       | Not modeled                                                                        | Shots from outside the alliance zone are not blocked          |
-| Fuel exit                | Fuel reappears 1 s after scoring at the hub's neutral-zone face, moving at 1.5 m/s | The manual describes four exits but not timing or speed       |
-| Trench post depth        | 0.3 m                                                                              | Not stated in the manual text                                 |
-| Tower                    | Uprights and rungs only                                                            | Tower base, wall, and supports are omitted                    |
-| Depot barriers           | Not modeled                                                                        | 1.125 in rails are too low to matter until wheels exist       |
-| Fuel friction and bounce | 0.7 and 0.35                                                                       | Guesses; tune during playtesting                              |
-| Field type               | Welded field                                                                       | The AndyMark field has the same critical dimensions           |
-| `maxExtension`           | 12 in                                                                              | **Not verified** against R106. Not enforced by the engine yet |
+| Item               | What the pack does                                                                                 | Why                                                                              |
+| ------------------ | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Hub opening        | Square instead of hexagonal                                                                        | The format only has boxes                                                        |
+| Hub net and funnel | Not modeled                                                                                        | Shots from outside the alliance zone are not blocked                             |
+| Fuel exit          | Fuel reappears 1 s after scoring at the hub's neutral-zone face, moving at 1.5 m/s                 | The manual describes four exits but not timing or speed                          |
+| Trench post depth  | 0.3 m                                                                                              | Not stated in the manual text                                                    |
+| Tower              | Uprights and rungs only                                                                            | Tower base, wall, and supports are omitted                                       |
+| Depot barriers     | Not modeled                                                                                        | 1.125 in rails are too low to matter until wheels exist                          |
+| Fuel surface       | Friction 0.7, restitution 0.35                                                                     | Guesses for the foam itself; tune during playtesting                             |
+| Carpet             | Engine default for the standard FRC carpet: friction 0.8, restitution 0.4, rolling resistance 0.08 | FIRST publishes no measurements; see "Measuring surfaces" in docs/PACK_FORMAT.md |
+| Field type         | Welded field                                                                                       | The AndyMark field has the same critical dimensions                              |
+| `maxExtension`     | 12 in                                                                                              | **Not verified** against R106. Not enforced by the engine yet                    |
 
 ## Not modeled yet
 

@@ -11,6 +11,8 @@ import {
   type Goal,
   type ObstacleShape,
   type PieceShape,
+  type Surface,
+  DEFAULT_STRUCTURE_SURFACE,
 } from './pack';
 import { checkRobotRules, IDLE_INPUT, type RobotInput, type RobotSpec } from './robot';
 import { SeededRandom } from './rng';
@@ -25,6 +27,39 @@ const ROBOT_EDGE_RADIUS = 0.03;
 
 /** How far ridge obstacles extend below their box (into the floor). */
 const RIDGE_SINK = 0.03;
+
+/**
+ * Robots are driven by setting velocity, not by wheel friction, so they have zero
+ * friction against everything. That lets box-shaped bodies slide up ramps. Low
+ * restitution stands in for foam bumpers.
+ */
+const ROBOT_SURFACE: Surface = { friction: 0, restitution: 0.2 };
+
+/** A piece within this distance of the carpet counts as rolling on it. */
+const CARPET_CONTACT_TOLERANCE = 0.005;
+/** Below this speed a rolling piece is stopped outright so it can sleep. */
+const ROLLING_STOP_SPEED = 0.01;
+
+/**
+ * Applies a surface so every contact uses the geometric mean of both sides.
+ * Rapier multiplies coefficients under the Multiply rule, so storing sqrt(value)
+ * on each collider gives sqrt(a) * sqrt(b) = sqrt(a * b) for every pair.
+ */
+function withSurface(desc: RAPIER.ColliderDesc, surface: Surface): RAPIER.ColliderDesc {
+  return desc
+    .setFriction(Math.sqrt(surface.friction))
+    .setFrictionCombineRule(RAPIER.CoefficientCombineRule.Multiply)
+    .setRestitution(Math.sqrt(surface.restitution))
+    .setRestitutionCombineRule(RAPIER.CoefficientCombineRule.Multiply);
+}
+
+/** The friction or restitution the engine uses when two surfaces touch. */
+export function combineSurfaces(a: Surface, b: Surface): Surface {
+  return {
+    friction: Math.sqrt(a.friction * b.friction),
+    restitution: Math.sqrt(a.restitution * b.restitution),
+  };
+}
 
 let rapierReady: Promise<void> | undefined;
 
@@ -110,6 +145,8 @@ interface PieceRecord {
   id: number;
   type: string;
   shape: PieceShape;
+  /** Measured value from the piece type, or undefined to use the carpet's. */
+  rollingResistance: number | undefined;
   state: PieceState;
   body: RigidBody | null;
   heldBy: string | null;
@@ -258,6 +295,7 @@ export class Simulation {
     }
 
     this.world.step();
+    this.applyRollingResistance();
     this.tickCount += 1;
     this.returnProcessedPieces();
     this.checkScoring();
@@ -325,26 +363,38 @@ export class Simulation {
   }
 
   private buildField(): void {
-    const { size, wallHeight, obstacles } = this.pack.field;
+    const { size, wallHeight, obstacles, carpet, wallSurface } = this.pack.field;
     const [length, width] = size;
-    const fixedBox = (cx: number, cy: number, cz: number, hx: number, hy: number, hz: number) => {
+    const fixedBox = (
+      surface: Surface,
+      cx: number,
+      cy: number,
+      cz: number,
+      hx: number,
+      hy: number,
+      hz: number,
+    ) => {
       const body = this.world.createRigidBody(
         RAPIER.RigidBodyDesc.fixed().setTranslation(cx, cy, cz),
       );
-      this.world.createCollider(RAPIER.ColliderDesc.cuboid(hx, hy, hz).setFriction(0.8), body);
+      this.world.createCollider(withSurface(RAPIER.ColliderDesc.cuboid(hx, hy, hz), surface), body);
     };
 
     const t = 0.5; // half-thickness of floor and walls
-    fixedBox(length / 2, width / 2, -t, length / 2 + 2 * t, width / 2 + 2 * t, t);
-    fixedBox(-t, width / 2, wallHeight / 2, t, width / 2 + 2 * t, wallHeight / 2);
-    fixedBox(length + t, width / 2, wallHeight / 2, t, width / 2 + 2 * t, wallHeight / 2);
-    fixedBox(length / 2, -t, wallHeight / 2, length / 2, t, wallHeight / 2);
-    fixedBox(length / 2, width + t, wallHeight / 2, length / 2, t, wallHeight / 2);
+    fixedBox(carpet, length / 2, width / 2, -t, length / 2 + 2 * t, width / 2 + 2 * t, t);
+    const wall = (cx: number, cy: number, hx: number, hy: number) =>
+      fixedBox(wallSurface, cx, cy, wallHeight / 2, hx, hy, wallHeight / 2);
+    wall(-t, width / 2, t, width / 2 + 2 * t);
+    wall(length + t, width / 2, t, width / 2 + 2 * t);
+    wall(length / 2, -t, length / 2, t);
+    wall(length / 2, width + t, length / 2, t);
 
-    for (const obstacle of obstacles) this.addObstacle(obstacle.shape);
+    for (const obstacle of obstacles) {
+      this.addObstacle(obstacle.shape, obstacle.surface ?? DEFAULT_STRUCTURE_SURFACE);
+    }
   }
 
-  private addObstacle(shape: ObstacleShape): void {
+  private addObstacle(shape: ObstacleShape, surface: Surface): void {
     const [cx, cy, cz] = shape.center;
     const [sx, sy, sz] = shape.size;
     const body = this.world.createRigidBody(
@@ -352,7 +402,7 @@ export class Simulation {
     );
     if (shape.kind === 'box') {
       this.world.createCollider(
-        RAPIER.ColliderDesc.cuboid(sx / 2, sy / 2, sz / 2).setFriction(0.8),
+        withSurface(RAPIER.ColliderDesc.cuboid(sx / 2, sy / 2, sz / 2), surface),
         body,
       );
       return;
@@ -370,7 +420,7 @@ export class Simulation {
         : [-hx, -hy, base, -hx, hy, base, -hx, 0, hz, hx, -hy, base, hx, hy, base, hx, 0, hz];
     const hull = RAPIER.ColliderDesc.convexHull(new Float32Array(points));
     if (!hull) throw new Error('could not build ridge obstacle');
-    this.world.createCollider(hull.setFriction(0.8), body);
+    this.world.createCollider(withSurface(hull, surface), body);
   }
 
   /** Evenly spaced positions filling a box from the floor up, one layer at a time. */
@@ -413,6 +463,7 @@ export class Simulation {
       id: this.pieces.length,
       type,
       shape: pieceType.shape,
+      rollingResistance: pieceType.rollingResistance,
       state: 'field',
       body: onField ? this.createPieceBody(type, x, y, z, { x: 0, y: 0, z: 0 }) : null,
       heldBy: null,
@@ -448,15 +499,7 @@ export class Simulation {
             type.shape.size[1] / 2,
             type.shape.size[2] / 2,
           );
-    this.world.createCollider(
-      collider
-        .setMass(type.mass)
-        .setFriction(type.friction)
-        // Max outranks the robots' Min rule, so pieces keep their grip against robots.
-        .setFrictionCombineRule(RAPIER.CoefficientCombineRule.Max)
-        .setRestitution(type.restitution),
-      body,
-    );
+    this.world.createCollider(withSurface(collider.setMass(type.mass), type), body);
     // New bodies can otherwise join a sleeping island and hang in midair.
     body.wakeUp();
     return body;
@@ -475,17 +518,15 @@ export class Simulation {
         .setCanSleep(false),
     );
     this.world.createCollider(
-      RAPIER.ColliderDesc.roundCuboid(
-        frame.length / 2 - r,
-        frame.width / 2 - r,
-        frame.height / 2 - r,
-        r,
-      )
-        .setMass(mass)
-        // Robots are driven by setting velocity, not by wheel friction. Zero friction lets
-        // the box-shaped body slide up ramps instead of sticking to them.
-        .setFriction(0)
-        .setFrictionCombineRule(RAPIER.CoefficientCombineRule.Min),
+      withSurface(
+        RAPIER.ColliderDesc.roundCuboid(
+          frame.length / 2 - r,
+          frame.width / 2 - r,
+          frame.height / 2 - r,
+          r,
+        ).setMass(mass),
+        ROBOT_SURFACE,
+      ),
       body,
     );
     return { entry, body, stored: [], releaseWasPressed: false };
@@ -641,6 +682,32 @@ export class Simulation {
       }
       const info = { goal, alliance: goal.creditAlliance, pieceType: piece.type, active };
       for (const mechanic of this.mechanics) mechanic.onPieceScored?.(info, context);
+    }
+  }
+
+  /**
+   * Rapier has no rolling resistance, so a ball would roll on carpet almost
+   * forever. Each step, round pieces touching the carpet lose speed at
+   * rollingResistance * g, with spin reduced by the same ratio so they keep
+   * rolling rather than skidding.
+   */
+  private applyRollingResistance(): void {
+    const { carpet } = this.pack.field;
+    for (const piece of this.pieces) {
+      if (piece.state !== 'field' || !piece.body || piece.shape.kind !== 'sphere') continue;
+      if (piece.body.isSleeping()) continue;
+      const p = piece.body.translation();
+      if (p.z > piece.shape.radius + CARPET_CONTACT_TOLERANCE) continue;
+
+      const v = piece.body.linvel();
+      const speed = Math.hypot(v.x, v.y);
+      if (speed === 0) continue;
+      const resistance = piece.rollingResistance ?? carpet.rollingResistance;
+      const next = Math.max(0, speed - resistance * GRAVITY * SIM_STEP_SECONDS);
+      const ratio = next < ROLLING_STOP_SPEED ? 0 : next / speed;
+      const w = piece.body.angvel();
+      piece.body.setLinvel({ x: v.x * ratio, y: v.y * ratio, z: v.z }, false);
+      piece.body.setAngvel({ x: w.x * ratio, y: w.y * ratio, z: w.z * ratio }, false);
     }
   }
 
