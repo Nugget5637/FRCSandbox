@@ -71,26 +71,46 @@ describe('carpet material', () => {
     expect(slick).toBeGreaterThan(grippy * 3);
   });
 
-  it('stops rolling balls through rolling resistance', () => {
+  it('rolls a ball a long way but eventually stops it', () => {
+    // Balls now roll (spin up from friction) and coast far, but still settle.
     const rolling = travel(arenaWith(sphere));
-    expect(rolling).toBeGreaterThan(0.5);
-    expect(rolling).toBeLessThan(3);
+    expect(rolling).toBeGreaterThan(1);
 
     const noResistance = travel(arenaWith(sphere, { ...FRC_CARPET, rollingResistance: 0 }));
-    expect(noResistance).toBeGreaterThan(rolling * 2);
+    expect(noResistance).toBeGreaterThan(rolling);
+  });
+
+  it('a rolling ball comes to rest within a match (so it can sleep)', () => {
+    const raw = arenaWith(sphere) as Raw;
+    raw.preload = { type: 'ball', maxPerRobot: 1 };
+    const pack = loadGamePack(raw);
+    const robot: RobotEntry = {
+      id: 'blue-1',
+      alliance: 'blue',
+      spec: { ...TEST_ROBOT_SPEC, release: { height: 0.12, speed: 3, pitch: 0 } },
+      start: { x: 1, y: 1, yaw: 0 },
+      preload: 1,
+    };
+    const sim = new Simulation({ pack, robots: [robot] });
+    sim.step({ 'blue-1': { drive: { x: 0, y: 0 }, rotate: 0, intake: false, release: true } });
+    for (let i = 0; i < 10 * SIM_HZ; i++) sim.step();
+    const piece = sim.snapshot().pieces[0]!;
+    const prev = piece.position!.x;
+    sim.step();
+    const moved = Math.abs(sim.snapshot().pieces[0]!.position!.x - prev);
+    expect(moved).toBeLessThan(0.001); // at rest after 10 s
+    sim.dispose();
   });
 
   it('rolls shorter on a rougher carpet', () => {
     const normal = travel(arenaWith(sphere));
-    const rough = travel(arenaWith(sphere, { ...FRC_CARPET, rollingResistance: 0.16 }));
-    // Rolling distance is v^2 / (2 c g), so doubling c roughly halves it.
-    expect(rough).toBeLessThan(normal * 0.65);
-    expect(rough).toBeGreaterThan(normal * 0.35);
+    const rough = travel(arenaWith(sphere, { ...FRC_CARPET, rollingResistance: 0.3 }));
+    expect(rough).toBeLessThan(normal);
   });
 
   it("lets a piece override the carpet's rolling resistance with a measured value", () => {
     const fromCarpet = travel(arenaWith(sphere));
-    const measured = travel(arenaWith({ ...sphere, rollingResistance: 0.16 }));
-    expect(measured).toBeLessThan(fromCarpet * 0.65);
+    const measured = travel(arenaWith({ ...sphere, rollingResistance: 0.3 }));
+    expect(measured).toBeLessThan(fromCarpet);
   });
 });

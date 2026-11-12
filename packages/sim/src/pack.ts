@@ -43,7 +43,7 @@ export type Carpet = z.output<typeof CarpetSchema>;
  * pile, used 2024-2027). FIRST publishes no friction measurements, so these
  * are estimates; see docs/PACK_FORMAT.md for how to measure them.
  */
-export const FRC_CARPET: Carpet = { friction: 0.8, restitution: 0.4, rollingResistance: 0.08 };
+export const FRC_CARPET: Carpet = { friction: 0.8, restitution: 0.4, rollingResistance: 0.05 };
 
 /** Default for walls and field structures (polycarbonate, aluminum, steel). */
 export const DEFAULT_STRUCTURE_SURFACE: Surface = { friction: 0.4, restitution: 0.5 };

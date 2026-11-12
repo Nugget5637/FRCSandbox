@@ -43,9 +43,9 @@ export const DEFAULT_ANGULAR_ACCELERATION = 8 * Math.PI;
 const ROBOT_SURFACE: Surface = { friction: 0, restitution: 0.2 };
 
 /** A piece within this distance of the carpet counts as rolling on it. */
-const CARPET_CONTACT_TOLERANCE = 0.005;
+const CARPET_CONTACT_TOLERANCE = 0.01;
 /** Below this speed a rolling piece is stopped outright so it can sleep. */
-const ROLLING_STOP_SPEED = 0.01;
+const ROLLING_STOP_SPEED = 0.03;
 
 /**
  * Applies a surface so every contact uses the geometric mean of both sides.
@@ -701,10 +701,16 @@ export class Simulation {
   }
 
   /**
-   * Rapier has no rolling resistance, so a ball would roll on carpet almost
-   * forever. Each step, round pieces touching the carpet lose speed at
-   * rollingResistance * g, with spin reduced by the same ratio so they keep
-   * rolling rather than skidding.
+   * Rolling resistance.
+   *
+   * Rapier models sliding friction and angular inertia but not rolling
+   * resistance, so a true rolling ball would coast on carpet almost forever.
+   * We leave the ball's spin alone so friction can spin it up naturally (it
+   * grips the carpet and starts rolling instead of scrubbing), and apply only
+   * a gentle drag: a small deceleration proportional to rollingResistance,
+   * which slightly slows a rolling ball over a long distance. The ball keeps
+   * its stored spin, so it rolls slower but for longer. Below a crawl we stop
+   * it outright so hundreds of settled pieces can sleep and stay cheap.
    */
   private applyRollingResistance(): void {
     const { carpet } = this.pack.field;
@@ -717,12 +723,23 @@ export class Simulation {
       const v = piece.body.linvel();
       const speed = Math.hypot(v.x, v.y);
       if (speed === 0) continue;
+
       const resistance = piece.rollingResistance ?? carpet.rollingResistance;
-      const next = Math.max(0, speed - resistance * GRAVITY * SIM_STEP_SECONDS);
-      const ratio = next < ROLLING_STOP_SPEED ? 0 : next / speed;
-      const w = piece.body.angvel();
+      const decel = resistance * GRAVITY * SIM_STEP_SECONDS;
+      const next = speed - decel;
+
+      if (next < ROLLING_STOP_SPEED) {
+        // Settle: stop translating and spinning so the body can sleep.
+        piece.body.setLinvel({ x: 0, y: 0, z: v.z }, false);
+        const w = piece.body.angvel();
+        piece.body.setAngvel({ x: 0, y: 0, z: w.z * 0.5 }, false);
+        continue;
+      }
+
+      // Gentle drag on translation only. Spin is left to Rapier's friction so
+      // the ball keeps rolling and loses speed slowly.
+      const ratio = next / speed;
       piece.body.setLinvel({ x: v.x * ratio, y: v.y * ratio, z: v.z }, false);
-      piece.body.setAngvel({ x: w.x * ratio, y: w.y * ratio, z: w.z * ratio }, false);
     }
   }
 
