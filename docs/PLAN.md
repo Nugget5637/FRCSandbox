@@ -118,17 +118,19 @@ Pinned tool versions at Milestone 0: TypeScript 7.0.2, Vite 8.3.8, Vitest 5.1.0,
 
 Full detail and status live in [PROGRESS.md](../PROGRESS.md) and [milestones.csv](milestones.csv).
 
-| #   | Milestone                    | Depends on |
-| --- | ---------------------------- | ---------- |
-| 0   | Project skeleton and plan    | None       |
-| 1   | Core engine and pack format  | 0          |
-| 2   | REBUILT pack, built by hand  | 1          |
-| 3   | 3D rendering and driving     | 1, 2       |
-| 4   | 3D bot creator mode          | 1, 3       |
-| 5   | Second pack, built by hand   | 1          |
-| 6   | CAD pipeline                 | 2, 5       |
-| 7   | Manual-reading assist        | 2, 5       |
-| 8   | Polish and kickoff readiness | 4, 6, 7    |
+| #   | Milestone                          | Depends on |
+| --- | ---------------------------------- | ---------- |
+| 0   | Project skeleton and plan          | None       |
+| 1   | Core engine and pack format        | 0          |
+| 2   | REBUILT pack, built by hand        | 1          |
+| 3   | 3D rendering and driving           | 1, 2       |
+| 4   | 3D bot creator mode                | 1, 3       |
+| 5   | Second pack, built by hand         | 1          |
+| 6   | Application shell and presentation | 4, 5       |
+| 7   | CAD pipeline                       | 2, 5       |
+| 8   | Manual-reading assist              | 2, 5       |
+
+Milestone 6 (application shell) wraps the game in menus, a game picker, website style, and game-like flow. See [milestone-6-scope.md](milestone-6-scope.md). It absorbed the old "polish and kickoff readiness" milestone. The CAD pipeline and manual assist moved to 7 and 8.
 
 Build packs by hand (2 and 5) before building tools that automate pack creation (6 and 7).
 

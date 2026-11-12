@@ -7,17 +7,17 @@ This file is the source of truth for project status. Each work session updates t
 
 ## Milestone status
 
-| #   | Milestone                  | Status      | %   | Last updated | Note                                 |
-| --- | -------------------------- | ----------- | --- | ------------ | ------------------------------------ |
-| 0   | Project skeleton & plan    | Done        | 100 | 2026-11-11   | Tooling, CI, plan, steering          |
-| 1   | Core engine & pack format  | Done        | 100 | 2026-11-11   | 3D Rapier engine, pack v1, 23 tests  |
-| 2   | REBUILT pack (by hand)     | Done        | 100 | 2026-11-11   | Cited pack, hub shifts, 36 tests     |
-| 3   | 3D rendering & driving     | Done        | 100 | 2026-11-11   | Three.js, 3 cameras, touch, 47 tests |
-| 4   | 3D bot creator mode        | Not started | 0   | —            | Core player experience               |
-| 5   | Second pack (by hand)      | Not started | 0   | —            | Proves the template idea             |
-| 6   | CAD pipeline               | Not started | 0   | —            | After the format is proven           |
-| 7   | Manual-reading assist      | Not started | 0   | —            | Human-verified drafts                |
-| 8   | Polish & kickoff readiness | Not started | 0   | —            | Polish last                          |
+| #   | Milestone                        | Status      | %   | Last updated | Note                                 |
+| --- | -------------------------------- | ----------- | --- | ------------ | ------------------------------------ |
+| 0   | Project skeleton & plan          | Done        | 100 | 2026-11-11   | Tooling, CI, plan, steering          |
+| 1   | Core engine & pack format        | Done        | 100 | 2026-11-11   | 3D Rapier engine, pack v1, 23 tests  |
+| 2   | REBUILT pack (by hand)           | Done        | 100 | 2026-11-11   | Cited pack, hub shifts, 36 tests     |
+| 3   | 3D rendering & driving           | Done        | 100 | 2026-11-11   | Three.js, 3 cameras, touch, 47 tests |
+| 4   | 3D bot creator mode              | Not started | 0   | —            | Core player experience               |
+| 5   | Second pack (by hand)            | Not started | 0   | —            | Proves the template idea             |
+| 6   | Application shell & presentation | Not started | 0   | —            | Menus, game picker, style, feel      |
+| 7   | CAD pipeline                     | Not started | 0   | —            | After the format is proven           |
+| 8   | Manual-reading assist            | Not started | 0   | —            | Human-verified drafts                |
 
 ## Milestone 0 checklist
 
@@ -99,3 +99,4 @@ This file is the source of truth for project status. Each work session updates t
 - 2026-11-11: Milestone 3 follow-up (owner feedback). Fixed the Tab camera-switch bug: Tab was moving browser focus off the canvas, so input stopped until the player clicked back in; the game now calls preventDefault on its keys. Changed the broadcast camera to a fixed point high above field center that only rotates to track the robot (it no longer follows behind the wall). Tuned the robot to feel like swerve: much quicker acceleration (~22 m/s^2) and a slower turn rate (2*pi rad/s, about one second per 360 degrees). 47 tests pass. Not done here (folded into Milestone 5): hub panels, the hub net that blocks illegal shots, and the human player station with fuel feeding.
 - 2026-11-11: Broadcast camera reposition (owner feedback with a reference screenshot). Moved it to a fixed vantage point behind and above the blue alliance wall, centered on the field width, angled down toward the red end, matching REBUILD Simulator. It stays in one spot and pans both up/down and left/right to keep the robot framed; zoom still eases the pull-back and height at the alliance line. 47 tests pass.
 - 2026-11-11: Noted out-of-bounds re-entry in the Milestone 5 scope (owner question). Created docs/milestone-5-scope.md collecting everything folded into Milestone 5: cylinder pieces, rotated goals, hub panels and net, human player station, and referee-style out-of-bounds re-entry. No code changes. Raised the M5 estimate to ~90 for the added scope.
+- 2026-11-11: Reworked the milestone list (owner request). Added "application shell and presentation" as the new Milestone 6: main menu, a game picker that selects a built-in game or imports a new one (validated, data-only, stored in IndexedDB), setup/pause/post-match screens, routing, settings, website style, transitions, sound, and tutorial. It absorbs the old polish/kickoff milestone. The CAD pipeline and manual assist moved to 7 and 8. See docs/milestone-6-scope.md. Docs only.
