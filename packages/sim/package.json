@@ -1,0 +1,14 @@
+{
+  "name": "@frcsandbox/sim",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Headless, season-agnostic simulation engine. Must never depend on the DOM or rendering code.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  }
+}

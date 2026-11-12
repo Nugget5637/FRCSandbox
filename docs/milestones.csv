@@ -1,0 +1,10 @@
+Milestone,Task,Description,Depends On,Status,% Complete,Est. Credits,Notes
+0,Project skeleton & plan,"Repo setup, build tooling, and a plan file that every session reads first",None,Done,100,~40,"Done 2026-11-11: npm workspaces, TypeScript, Vite, Vitest, Prettier, CI, docs/PLAN.md"
+1,Core engine & pack format,"Fixed-timestep loop, robot and game-piece state, scoring events, and the game-pack folder format",M0,Not started,0,~150,The contract everything else plugs into; build alone first
+2,REBUILT pack (by hand),"Author the 2026 game pack manually to learn what the format actually needs",M1,Not started,0,~120,De-risks the format; no import tools yet
+3,Browser rendering & driving,"WebGL2 rendering, camera, field drawn from the pack, instanced game pieces, and driving one robot with keyboard/gamepad/touch",M1; M2,Not started,0,~200,First phone performance test happens here
+4,Bot creator mode,"Grid builder, part palette, mirror mode, live overlays (weight/CoM/perimeter/extension), control bindings, compile to bodies and joints, save/load",M1; M3,Not started,0,~300,Where players spend the most time
+5,Second pack (by hand),"Author an older game (e.g. 2025 REEFSCAPE) by hand to prove the template idea works",M1,Not started,0,~120,Real test that packs are game-agnostic
+6,CAD pipeline,"STEP-to-mesh conversion, simplification, collision-shape generation, and a labeling tool with suggested labels",M2; M5,Not started,0,~300,Build only after the format is proven by hand
+7,Manual-reading assist,"Draft scoring, match-timing, and robot-rules files from a manual with rule citations for human review",M2; M5,Not started,0,~200,"Assistance, not automation; always human-verified"
+8,Polish & kickoff readiness,"Tutorial, more parts, engineering report, kickoff checklist, and any new mechanic modules",M4; M6; M7,Not started,0,~300,Polish last; the checklist enables fast kickoff turnaround
