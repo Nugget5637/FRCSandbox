@@ -7,17 +7,17 @@ This file is the source of truth for project status. Each work session updates t
 
 ## Milestone status
 
-| #   | Milestone                  | Status      | %   | Last updated | Note                           |
-| --- | -------------------------- | ----------- | --- | ------------ | ------------------------------ |
-| 0   | Project skeleton & plan    | Done        | 100 | 2026-11-11   | Tooling, CI, plan, steering    |
-| 1   | Core engine & pack format  | Not started | 0   | —            | Next up; 3D physics from start |
-| 2   | REBUILT pack (by hand)     | Not started | 0   | —            | De-risks the format            |
-| 3   | 3D rendering & driving     | Not started | 0   | —            | First phone performance test   |
-| 4   | 3D bot creator mode        | Not started | 0   | —            | Core player experience         |
-| 5   | Second pack (by hand)      | Not started | 0   | —            | Proves the template idea       |
-| 6   | CAD pipeline               | Not started | 0   | —            | After the format is proven     |
-| 7   | Manual-reading assist      | Not started | 0   | —            | Human-verified drafts          |
-| 8   | Polish & kickoff readiness | Not started | 0   | —            | Polish last                    |
+| #   | Milestone                  | Status      | %   | Last updated | Note                                |
+| --- | -------------------------- | ----------- | --- | ------------ | ----------------------------------- |
+| 0   | Project skeleton & plan    | Done        | 100 | 2026-11-11   | Tooling, CI, plan, steering         |
+| 1   | Core engine & pack format  | Done        | 100 | 2026-11-11   | 3D Rapier engine, pack v1, 23 tests |
+| 2   | REBUILT pack (by hand)     | Not started | 0   | —            | De-risks the format                 |
+| 3   | 3D rendering & driving     | Not started | 0   | —            | First phone performance test        |
+| 4   | 3D bot creator mode        | Not started | 0   | —            | Core player experience              |
+| 5   | Second pack (by hand)      | Not started | 0   | —            | Proves the template idea            |
+| 6   | CAD pipeline               | Not started | 0   | —            | After the format is proven          |
+| 7   | Manual-reading assist      | Not started | 0   | —            | Human-verified drafts               |
+| 8   | Polish & kickoff readiness | Not started | 0   | —            | Polish last                         |
 
 ## Milestone 0 checklist
 
@@ -34,6 +34,22 @@ This file is the source of truth for project status. Each work session updates t
 - [ ] Owner runs `npm run dev` and confirms the page in a real browser
 - [ ] Owner chooses a license
 
+## Milestone 1 checklist
+
+- [x] Chose libraries: Rapier 3D (deterministic build) for physics, Three.js for rendering (installed in Milestone 3)
+- [x] Game pack format v1 with validation and cross-reference checks (`docs/PACK_FORMAT.md`)
+- [x] Mechanic module registry; packs naming unknown mechanics fail to load
+- [x] Robot spec and robot-rule checks (perimeter, height, mass)
+- [x] Fixed-timestep 3D simulation: floor, walls, obstacles, gravity, pieces, robots
+- [x] Field-relative driving with acceleration and turn-rate limits
+- [x] Intake capture zone, piece storage, release with launch speed and angle
+- [x] Goal volumes, period-specific points, alliance score
+- [x] Match periods and an event log (period start, acquire, release, score, match end)
+- [x] Seeded random numbers; same seed and inputs replay identically (tested)
+- [x] Headless test: scripted robot collects a ball and scores 4 points in auto, 2 in teleop
+- [ ] Robot tipping (rotations other than yaw are locked until the bot creator)
+- [ ] Extension limits (`maxExtension` is stored but not checked until mechanisms exist)
+
 ## Credit notes
 
 - Milestone 0 estimate was about 40 credits. Record the measured cost from the Kiro usage page here: ______
@@ -45,3 +61,4 @@ This file is the source of truth for project status. Each work session updates t
 - 2026-11-11: Created tracker and milestone sheet in the workspace.
 - 2026-11-11: Completed Milestone 0. `npm run check` passes: formatting, typecheck for both workspaces, 3 tests, production build (JS 1.72 kB). Could not run a browser in the sandbox because server commands are blocked; verified the built HTML and assets instead. Open decisions: rendering library, physics library, license.
 - 2026-11-11: Decided the game and bot creator are both fully 3D. Updated `docs/PLAN.md` (new "3D game and 3D creator" section and decision log), milestone descriptions and estimates, and the placeholder page text. Added `.gitattributes` so Windows checkouts keep LF line endings. Next: choose 3D physics and rendering libraries at the start of Milestone 1.
+- 2026-11-11: Completed Milestone 1 under a 200-credit cap set by the owner. Added the 3D engine on Rapier's deterministic build, game pack format v1 with validation, robot rules, mechanic registry, seeded random numbers, and 23 tests. The scripted scoring test passes in both auto and teleop, and two runs with the same seed produce identical results. Deferred: tipping and extension checks. Next: Milestone 2, the REBUILT pack by hand.

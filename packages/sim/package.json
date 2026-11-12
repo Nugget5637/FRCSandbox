@@ -1,7 +1,7 @@
 {
   "name": "@frcsandbox/sim",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Headless, season-agnostic simulation engine. Must never depend on the DOM or rendering code.",
   "type": "module",
   "exports": {
@@ -10,5 +10,9 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run"
+  },
+  "dependencies": {
+    "@dimforge/rapier3d-deterministic-compat": "0.21.0",
+    "zod": "4.6.7"
   }
 }
