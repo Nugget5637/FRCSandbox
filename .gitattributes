@@ -1,0 +1,10 @@
+# Store and check out text files with LF endings on every OS.
+# Without this, Git for Windows may convert to CRLF and fail the Prettier check.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.glb binary
+*.ktx2 binary
+*.step binary
+*.stp binary

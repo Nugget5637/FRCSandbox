@@ -14,8 +14,8 @@ The goal is fast concept prototyping: comparing robot architectures and seeing d
 
 - Season-agnostic simulation engine
 - Game pack format, with REBUILT as the first pack
-- Browser rendering and driving (keyboard, gamepad, touch)
-- Trailmakers-style bot creator with live legality and physics overlays
+- 3D browser rendering and driving (keyboard, gamepad, touch)
+- 3D Trailmakers-style bot creator with live legality and physics overlays
 - Tools that speed up making new packs (CAD import, labeling, manual-reading assist)
 
 ### Out of scope
@@ -59,6 +59,19 @@ tools/        (planned, Milestones 6-7) CAD pipeline, labeling, manual assist
 - Game pieces inside a robot use a state machine (captured, transported, stored, ready, released), not contact physics. Real physics applies only after release.
 - Drivetrains use a raycast-and-traction model rather than physical wheel cylinders.
 - Visual-only details (e-chains, wires) never enter the physics simulation.
+
+### 3D game and 3D creator
+
+Both the driving game and the bot creator are fully 3D. There is no 2D mode.
+
+- **Physics is 3D from the start.** Robot bodies, joints, tipping, game-piece flight, and field collision all run in a 3D physics engine. The engine never assumes a flat 2D world.
+- **Rendering** uses WebGL2 with low-poly glTF models, baked lighting, instanced game pieces, and a capped pixel ratio so the game runs on weak devices.
+- **Creator placement** uses a 3D grid with a 0.5-inch (0.0127 m) base cell, matching the hole pattern on much FRC tube stock. Parts snap to the face under the cursor, found by raycasting. Rotation is limited to the 24 right-angle orientations. Bought parts (swerve modules, gearboxes) attach only at their real mounting points.
+- **Creator camera** orbits, pans, and zooms around the robot. A ghost preview shows where the next part will go and turns red if the placement is invalid.
+- **Mirror mode** reflects grid position and orientation across the robot's center plane.
+- **Overlays** are drawn in 3D: center of mass marker, tipping polygon, frame perimeter outline, extension and height limit boxes.
+- **Device priority:** the creator is desktop-first (mouse and keyboard). Driving must also work on phones and tablets. A simplified touch creator may come later.
+- **Build/drive toggle:** one key switches between building and driving, returning the robot to a test spot. This loop is the core of the creator's feel.
 
 ## 4. Conventions
 
@@ -105,17 +118,17 @@ Pinned tool versions at Milestone 0: TypeScript 7.0.2, Vite 8.3.8, Vitest 5.1.0,
 
 Full detail and status live in [PROGRESS.md](../PROGRESS.md) and [milestones.csv](milestones.csv).
 
-| #   | Milestone                     | Depends on |
-| --- | ----------------------------- | ---------- |
-| 0   | Project skeleton and plan     | None       |
-| 1   | Core engine and pack format   | 0          |
-| 2   | REBUILT pack, built by hand   | 1          |
-| 3   | Browser rendering and driving | 1, 2       |
-| 4   | Bot creator mode              | 1, 3       |
-| 5   | Second pack, built by hand    | 1          |
-| 6   | CAD pipeline                  | 2, 5       |
-| 7   | Manual-reading assist         | 2, 5       |
-| 8   | Polish and kickoff readiness  | 4, 6, 7    |
+| #   | Milestone                    | Depends on |
+| --- | ---------------------------- | ---------- |
+| 0   | Project skeleton and plan    | None       |
+| 1   | Core engine and pack format  | 0          |
+| 2   | REBUILT pack, built by hand  | 1          |
+| 3   | 3D rendering and driving     | 1, 2       |
+| 4   | 3D bot creator mode          | 1, 3       |
+| 5   | Second pack, built by hand   | 1          |
+| 6   | CAD pipeline                 | 2, 5       |
+| 7   | Manual-reading assist        | 2, 5       |
+| 8   | Polish and kickoff readiness | 4, 6, 7    |
 
 Build packs by hand (2 and 5) before building tools that automate pack creation (6 and 7).
 
@@ -130,8 +143,10 @@ Build packs by hand (2 and 5) before building tools that automate pack creation 
 | 2026-11-11 | SI units and WPILib field coordinates                          | Avoids unit bugs; lines up with FRC robot code and tools         |
 | 2026-11-11 | Game packs are data; new mechanics are reviewed engine modules | Downloaded packs must never run arbitrary code                   |
 | 2026-11-11 | Relative Vite `base`                                           | Built site works on any static host path, including GitHub Pages |
-| Open       | Rendering library (Three.js vs. Babylon.js)                    | Decide at Milestone 3                                            |
-| Open       | Physics library (Rapier vs. Jolt)                              | Decide at Milestone 1 or 3, once engine needs are concrete       |
+| 2026-11-11 | Game and bot creator are both fully 3D                         | Owner's choice; needed for a Trailmakers-style creator           |
+| 2026-11-11 | Repository uses LF line endings (`.gitattributes`)             | Prevents Windows checkouts from failing the Prettier check       |
+| Open       | 3D rendering library (Three.js vs. Babylon.js)                 | Decide at start of Milestone 1; leaning Three.js                 |
+| Open       | 3D physics library (Rapier 3D vs. Jolt)                        | Decide at start of Milestone 1; leaning Rapier 3D                |
 | Open       | License                                                        | Owner to choose before publishing                                |
 
 ## 10. Legal notes

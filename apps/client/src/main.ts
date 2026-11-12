@@ -4,7 +4,8 @@ import { ENGINE_VERSION, SIM_HZ } from '@frcsandbox/sim';
  * Milestone 0 client entry point.
  *
  * Proves the client builds, imports the sim package across the workspace
- * boundary, and can draw to a canvas. Real rendering (WebGL2) arrives in
+ * boundary, and can draw to a canvas. This flat placeholder is temporary: the
+ * game and bot creator are fully 3D, and the WebGL2 3D view replaces it in
  * Milestone 3.
  */
 
@@ -61,7 +62,7 @@ function drawPlaceholderField(): void {
   context.fillStyle = '#6b7280';
   context.font = '14px system-ui, sans-serif';
   context.textAlign = 'center';
-  context.fillText('No game pack loaded', width / 2, height / 2);
+  context.fillText('No game pack loaded · 3D view arrives in Milestone 3', width / 2, height / 2);
 }
 
 drawPlaceholderField();

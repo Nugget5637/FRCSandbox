@@ -1,6 +1,6 @@
 # FRC Sandbox
 
-A single-player browser game for building FRC-style robots from modular parts and testing them on swappable season "game packs." REBUILT (2026) will be the first pack.
+A single-player 3D browser game for building FRC-style robots from modular parts and testing them on swappable season "game packs." REBUILT (2026) will be the first pack.
 
 > **Status:** Milestone 0 (project skeleton). There is no gameplay yet. See [PROGRESS.md](PROGRESS.md).
 

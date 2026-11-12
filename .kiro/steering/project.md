@@ -6,6 +6,7 @@ inclusion: always
 
 - Before starting work, read `docs/PLAN.md` and `PROGRESS.md`. Follow the session protocol in `docs/PLAN.md` section 7.
 - Multiplayer is out of scope. Do not add networking, rooms, or server code.
+- The game and the bot creator are both fully 3D. Do not build 2D-only systems or assume a flat world in the engine.
 - `packages/sim` must not use DOM or browser APIs or import from `apps/`.
 - Use SI units and WPILib field coordinates in code and pack data.
 - Game packs are data only. Never make a pack execute code.
