@@ -9,6 +9,24 @@ import type { ControlFrame } from './render/cameras';
  * "forward" means the way the robot faces; in the field frame, "forward" means
  * downfield (+x), the way a driver behind the blue wall sees it.
  */
+/** Keys the game consumes, so the browser shouldn't act on them (Tab, Space, arrows). */
+const GAME_KEYS = new Set([
+  'Tab',
+  'Space',
+  'KeyW',
+  'KeyA',
+  'KeyS',
+  'KeyD',
+  'KeyQ',
+  'KeyE',
+  'KeyJ',
+  'KeyK',
+  'ArrowUp',
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+]);
+
 export class InputManager {
   private readonly keys = new Set<string>();
   private readonly touch = { x: 0, y: 0, rotate: 0, intake: false, release: false };
@@ -17,7 +35,10 @@ export class InputManager {
   constructor(target: Window = window) {
     target.addEventListener('keydown', (e) => {
       if (!e.repeat) this.keys.add(e.code);
-      if (e.code === 'Space') e.preventDefault();
+      // Stop the browser's default handling of game keys. Tab is the important
+      // one: without this it moves focus off the canvas and keystrokes stop
+      // reaching the game until the player clicks back in.
+      if (GAME_KEYS.has(e.code)) e.preventDefault();
     });
     target.addEventListener('keyup', (e) => this.keys.delete(e.code));
     target.addEventListener('blur', () => this.keys.clear());

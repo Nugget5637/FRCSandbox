@@ -53,7 +53,6 @@ export class DriverCameras {
 
   private readonly chasePos = new THREE.Vector3();
   private readonly chaseTarget = new THREE.Vector3();
-  private readonly broadcastPos = new THREE.Vector3();
   private readonly broadcastTarget = new THREE.Vector3();
 
   // Broadcast zoom: 0 = pulled back (robot in its own zone), 1 = zoomed in.
@@ -149,29 +148,21 @@ export class DriverCameras {
         this.zoomFrom + (goal - this.zoomFrom) * easeOut(this.zoomElapsed / ZOOM_SECONDS);
     }
 
-    // Two camera placements, blended by zoomLevel. Both sit behind the blue wall (-x).
-    const back = lerp(9, 5.5, this.zoomLevel);
-    const height = lerp(7, 4, this.zoomLevel);
-    const target = new THREE.Vector3(
-      robotPos.x - back,
-      robotPos.y * 0.5 + pack.field.size[1] * 0.25,
-      height,
-    );
-    const look = new THREE.Vector3(
-      robotPos.x + 1.5,
-      robotPos.y * 0.5 + pack.field.size[1] * 0.25,
-      0.3,
-    );
+    // Fixed point high above field center. The position never moves; the camera
+    // only rotates (via lookAt) to track the robot, so the whole field stays in
+    // view and the robot is always framed. Zoom eases the height between two
+    // values when the robot crosses the alliance line.
+    const [length, width] = pack.field.size;
+    const height = lerp(13, 9, this.zoomLevel);
+    this.camera.position.set(length / 2, width / 2, height);
+    this.camera.up.set(0, 0, 1);
 
+    const look = new THREE.Vector3(robotPos.x, robotPos.y, robotPos.z);
     if (!this.initialized) {
-      this.broadcastPos.copy(target);
       this.broadcastTarget.copy(look);
     } else {
-      damp(this.broadcastPos, target, 6, dt);
-      damp(this.broadcastTarget, look, 6, dt);
+      damp(this.broadcastTarget, look, 8, dt);
     }
-    this.camera.position.copy(this.broadcastPos);
-    this.camera.up.set(0, 0, 1);
     this.camera.lookAt(this.broadcastTarget);
   }
 

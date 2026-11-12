@@ -97,8 +97,14 @@ describe('DriverCameras', () => {
         expect(pos.x).toBeLessThan(snap.robots[0]!.pose.x);
         expect(pos.z).toBeGreaterThan(0.5);
         expect(cams.controlFrame).toBe('robot');
+      } else if (mode === 'broadcast') {
+        // Fixed high above field center, driving field-relative.
+        expect(pos.x).toBeCloseTo(pack.field.size[0] / 2, 3);
+        expect(pos.y).toBeCloseTo(pack.field.size[1] / 2, 3);
+        expect(pos.z).toBeGreaterThan(8);
+        expect(cams.controlFrame).toBe('field');
       } else {
-        // Broadcast and station both sit behind the blue wall and drive field-relative.
+        // Driver station sits behind the blue wall and drives field-relative.
         expect(pos.x).toBeLessThan(snap.robots[0]!.pose.x);
         expect(cams.controlFrame).toBe('field');
       }
