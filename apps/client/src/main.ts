@@ -2,17 +2,19 @@ import {
   createDemoController,
   createSimulation,
   DEMO_ROBOT,
-  DEMO_ROBOT_SPEC,
   demoArena,
   ENGINE_VERSION,
+  loadGamePack,
   SIM_HZ,
   SIM_STEP_SECONDS,
   type DemoController,
+  type RobotEntry,
   type RobotInput,
   type SimEvent,
   type SimSnapshot,
   type Simulation,
 } from '@frcsandbox/sim';
+import rebuiltData from '../../../game-packs/rebuilt-2026/pack.json';
 
 /**
  * Temporary top-down debug view of the 3D engine.
@@ -30,12 +32,34 @@ if (!context) throw new Error('Canvas 2D is not available');
 const ctx: CanvasRenderingContext2D = context;
 const view: HTMLCanvasElement = canvas;
 
-const pack = demoArena();
+/** `?pack=rebuilt` shows the REBUILT field; otherwise the small demo arena. */
+const rebuiltMode = new URLSearchParams(location.search).get('pack') === 'rebuilt';
+const pack = rebuiltMode ? loadGamePack(rebuiltData) : demoArena();
 const [FIELD_LENGTH, FIELD_WIDTH] = pack.field.size;
+const firstPiece = pack.pieceTypes[0]!.shape;
+const PIECE_RADIUS = firstPiece.kind === 'sphere' ? firstPiece.radius : firstPiece.size[0] / 2;
+
+/** A legal REBUILT robot: 27 in square, 20 in tall, with a 70-degree shooter. */
+const REBUILT_ROBOT: RobotEntry = {
+  id: 'blue-1',
+  alliance: 'blue',
+  spec: {
+    frame: { length: 0.6858, width: 0.6858, height: 0.5 },
+    mass: 50,
+    maxSpeed: 4.5,
+    maxAcceleration: 6,
+    maxTurnRate: 6,
+    intake: { reach: 0.25, width: 0.6, capacity: 40 },
+    release: { height: 0.5, speed: 6.4, pitch: (70 * Math.PI) / 180 },
+  },
+  start: { x: 2.0, y: 4.0345, yaw: 0 },
+  preload: 8,
+};
+const ROBOT = rebuiltMode ? REBUILT_ROBOT : DEMO_ROBOT;
 
 let sim: Simulation;
 let controller: DemoController;
-let manual = false;
+let manual = rebuiltMode; // the scripted robot only knows the demo arena
 let paused = false;
 let speed = 1;
 let accumulator = 0;
@@ -44,7 +68,7 @@ const keys = new Set<string>();
 
 async function restart(): Promise<void> {
   sim?.dispose();
-  sim = await createSimulation({ pack, robots: [DEMO_ROBOT], seed: 1 });
+  sim = await createSimulation({ pack, robots: [ROBOT], seed: 1 });
   controller = createDemoController();
   accumulator = 0;
 }
@@ -64,13 +88,14 @@ function manualInput(): RobotInput {
 function tick(): void {
   const snapshot = sim.snapshot();
   const robotInput = manual ? manualInput() : controller.next(snapshot);
-  sim.step({ [DEMO_ROBOT.id]: robotInput });
+  sim.step({ [ROBOT.id]: robotInput });
 }
 
 window.addEventListener('keydown', (event) => {
   if (event.repeat) return;
   keys.add(event.code);
-  if (event.code === 'KeyM') manual = !manual;
+  if (event.code === 'KeyM' && !rebuiltMode) manual = !manual;
+  if (event.code === 'KeyT') location.search = rebuiltMode ? '' : '?pack=rebuilt';
   if (event.code === 'KeyP' || event.code === 'Space') paused = !paused;
   if (event.code === 'KeyR') void restart();
   if (event.code === 'Digit1') speed = 1;
@@ -131,7 +156,7 @@ function draw(snapshot: SimSnapshot, events: readonly SimEvent[]): void {
     if (piece.state === 'field' && piece.position) {
       const [sx, sy] = toScreen(piece.position.x, piece.position.y);
       const airborne = piece.position.z > 0.1;
-      const radius = Math.max(3, 0.075 * scale) * (airborne ? 1.25 : 1);
+      const radius = Math.max(2, PIECE_RADIUS * scale) * (airborne ? 1.25 : 1);
       if (airborne) {
         ctx.fillStyle = 'rgb(0 0 0 / 0.35)';
         ctx.beginPath();
@@ -166,8 +191,25 @@ function drawField(toScreen: (x: number, y: number) => [number, number], scale: 
     ctx.strokeRect(left, top, sx * scale, sy * scale);
   };
 
-  for (const obstacle of pack.field.obstacles) {
-    box(obstacle.box.center, obstacle.box.size, '#374151', '#6b7280');
+  for (const zone of pack.field.zones) {
+    const color =
+      zone.alliance === 'blue'
+        ? '59 130 246'
+        : zone.alliance === 'red'
+          ? '239 68 68'
+          : '255 255 255';
+    box(zone.box.center, zone.box.size, `rgb(${color} / 0.05)`, `rgb(${color} / 0.15)`);
+  }
+  // Draw low obstacles first so tall structures (hub, trench, tower) sit on top.
+  const byHeight = [...pack.field.obstacles].sort(
+    (a, b) => a.shape.center[2] + a.shape.size[2] / 2 - (b.shape.center[2] + b.shape.size[2] / 2),
+  );
+  for (const { shape } of byHeight) {
+    const top = shape.center[2] + shape.size[2] / 2;
+    if (shape.kind === 'ridge') box(shape.center, shape.size, '#78350f', '#f59e0b');
+    else if (shape.center[2] - shape.size[2] / 2 > 0.3)
+      box(shape.center, shape.size, 'rgb(156 163 175 / 0.35)', '#9ca3af');
+    else box(shape.center, shape.size, top > 1 ? '#4b5563' : '#374151', '#6b7280');
   }
   for (const goal of pack.field.goals) {
     const color = goal.creditAlliance === 'blue' ? '59 130 246' : '239 68 68';
@@ -185,7 +227,7 @@ function drawRobot(
   toScreen: (x: number, y: number) => [number, number],
   scale: number,
 ): void {
-  const { frame, intake } = DEMO_ROBOT_SPEC;
+  const { frame, intake } = ROBOT.spec;
   const [sx, sy] = toScreen(robot.pose.x, robot.pose.y);
   ctx.save();
   ctx.translate(sx, sy);
@@ -234,6 +276,13 @@ function drawHud(snapshot: SimSnapshot, events: readonly SimEvent[], width: numb
   ctx.fillText(`Blue ${snapshot.score.blue}`, 24, 120);
   ctx.fillStyle = '#fca5a5';
   ctx.fillText(`Red ${snapshot.score.red}`, 110, 120);
+  if (snapshot.goals.length > 1) {
+    ctx.fillStyle = '#d1d5db';
+    const status = snapshot.goals
+      .map((g) => `${g.alliance} ${g.active ? 'ACTIVE' : 'inactive'}`)
+      .join('  ·  ');
+    ctx.fillText(`Hubs: ${status}`, 200, 120);
+  }
 
   ctx.fillStyle = '#d1d5db';
   ctx.fillText(
@@ -279,6 +328,6 @@ function describe(event: SimEvent): string {
 
 status.innerHTML =
   `Engine v${ENGINE_VERSION} · top-down debug view (3D view in Milestone 3)<br>` +
-  `M manual/script · WASD drive · Q/E turn · J intake · K release · Space pause · R restart · 1/2/4 speed`;
+  `${rebuiltMode ? 'REBUILT 2026 field' : 'Demo arena'} · T switch field · ${rebuiltMode ? '' : 'M manual/script · '}WASD drive · Q/E turn · J intake · K release · Space pause · R restart · 1/2/4 speed`;
 
 void restart().then(() => requestAnimationFrame(frame));

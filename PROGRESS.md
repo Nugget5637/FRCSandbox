@@ -11,7 +11,7 @@ This file is the source of truth for project status. Each work session updates t
 | --- | -------------------------- | ----------- | --- | ------------ | ----------------------------------- |
 | 0   | Project skeleton & plan    | Done        | 100 | 2026-11-11   | Tooling, CI, plan, steering         |
 | 1   | Core engine & pack format  | Done        | 100 | 2026-11-11   | 3D Rapier engine, pack v1, 23 tests |
-| 2   | REBUILT pack (by hand)     | Not started | 0   | —            | De-risks the format                 |
+| 2   | REBUILT pack (by hand)     | Done        | 100 | 2026-11-11   | Cited pack, hub shifts, 36 tests    |
 | 3   | 3D rendering & driving     | Not started | 0   | —            | First phone performance test        |
 | 4   | 3D bot creator mode        | Not started | 0   | —            | Core player experience              |
 | 5   | Second pack (by hand)      | Not started | 0   | —            | Proves the template idea            |
@@ -50,6 +50,19 @@ This file is the source of truth for project status. Each work session updates t
 - [ ] Robot tipping (rotations other than yaw are locked until the bot creator)
 - [ ] Extension limits (`maxExtension` is stored but not checked until mechanisms exist)
 
+## Milestone 2 checklist
+
+- [x] REBUILT pack generated from cited measurements (`game-packs/rebuilt-2026/generate.mjs`, `SOURCES.md`)
+- [x] Field, hubs, bumps, trenches, and tower placed from the official AprilTag layout and the arena chapter
+- [x] 408 fuel staged in depots and the neutral zone, plus up to 8 preloaded per robot
+- [x] Match periods and point values from manual Tables 6-2 and 6-4
+- [x] `rebuilt-hub-shifts` mechanic matching manual Table 6-3, with the 3-second window and random tiebreak
+- [x] Format additions found by building the pack: ridge obstacles, zones, spawn areas, preloads, goal recycling, mechanic hooks
+- [x] Engine tests on the real pack: scoring and recycling, driving over a bump, trench height limit
+- [x] Debug view can show the REBUILT field (`?pack=rebuilt` or press T)
+- [ ] Tower climbing, ranking points, human players, fouls (need later milestones; listed in `SOURCES.md`)
+- [ ] `maxExtension` value checked against rule R106
+
 ## Credit notes
 
 - Milestone 0 estimate was about 40 credits. Record the measured cost from the Kiro usage page here: ______
@@ -63,3 +76,4 @@ This file is the source of truth for project status. Each work session updates t
 - 2026-11-11: Decided the game and bot creator are both fully 3D. Updated `docs/PLAN.md` (new "3D game and 3D creator" section and decision log), milestone descriptions and estimates, and the placeholder page text. Added `.gitattributes` so Windows checkouts keep LF line endings. Next: choose 3D physics and rendering libraries at the start of Milestone 1.
 - 2026-11-11: Completed Milestone 1 under a 200-credit cap set by the owner. Added the 3D engine on Rapier's deterministic build, game pack format v1 with validation, robot rules, mechanic registry, seeded random numbers, and 23 tests. The scripted scoring test passes in both auto and teleop, and two runs with the same seed produce identical results. Deferred: tipping and extension checks. Next: Milestone 2, the REBUILT pack by hand.
 - 2026-11-11: Added a temporary top-down debug view (owner request, outside the milestone plan). `npm run dev` now shows the demo arena running the real engine: a scripted robot collects six balls and scores them, or the owner can drive manually. Engine fixes found while building it: a robot can no longer recapture a ball in the same instant it releases it (0.5 s cooldown), and released balls are woken so they can't hang in midair. Known issue: the client bundle is 4.5 MB because this Rapier build embeds its WebAssembly; fix in Milestone 3 by loading the WebAssembly as a separate file. 24 tests pass.
+- 2026-11-11: Completed Milestone 2. Built the REBUILT pack from the 2026 manual (through final Team Update 22), the WPILib AprilTag layout, the inspection checklist, and Team 6328's public field constants. Added the `rebuilt-hub-shifts` mechanic and the format features the season needed. Engine fixes: robots now slide up ramps (zero friction and rounded edges), and ridge bases sit slightly below the floor so robots don't catch on the toe. 36 tests pass. Not modeled yet: climbing, ranking points, human players, fouls. Next: Milestone 3, 3D rendering and driving.

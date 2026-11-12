@@ -1,0 +1,819 @@
+{
+  "formatVersion": 1,
+  "id": "rebuilt-2026",
+  "name": "REBUILT presented by Haas",
+  "season": 2026,
+  "source": {
+    "manualRevision": "2026 Game Manual with Team Updates through TU22 (final); see SOURCES.md",
+    "url": "https://www.firstinspires.org/resources/library/frc/season-materials"
+  },
+  "field": {
+    "size": [
+      16.541,
+      8.069
+    ],
+    "wallHeight": 0.508,
+    "obstacles": [
+      {
+        "id": "blue-hub-base",
+        "shape": {
+          "kind": "box",
+          "center": [
+            4.6189,
+            4.0345,
+            0.7176
+          ],
+          "size": [
+            1.1938,
+            1.1938,
+            1.4351
+          ]
+        }
+      },
+      {
+        "id": "red-hub-base",
+        "shape": {
+          "kind": "box",
+          "center": [
+            11.9221,
+            4.0345,
+            0.7176
+          ],
+          "size": [
+            1.1938,
+            1.1938,
+            1.4351
+          ]
+        }
+      },
+      {
+        "id": "blue-hub-rim-near",
+        "shape": {
+          "kind": "box",
+          "center": [
+            4.0557,
+            4.0345,
+            1.632
+          ],
+          "size": [
+            0.0673,
+            1.1938,
+            0.3937
+          ]
+        }
+      },
+      {
+        "id": "red-hub-rim-near",
+        "shape": {
+          "kind": "box",
+          "center": [
+            12.4853,
+            4.0345,
+            1.632
+          ],
+          "size": [
+            0.0673,
+            1.1938,
+            0.3937
+          ]
+        }
+      },
+      {
+        "id": "blue-hub-rim-far",
+        "shape": {
+          "kind": "box",
+          "center": [
+            5.1821,
+            4.0345,
+            1.632
+          ],
+          "size": [
+            0.0673,
+            1.1938,
+            0.3937
+          ]
+        }
+      },
+      {
+        "id": "red-hub-rim-far",
+        "shape": {
+          "kind": "box",
+          "center": [
+            11.3589,
+            4.0345,
+            1.632
+          ],
+          "size": [
+            0.0673,
+            1.1938,
+            0.3937
+          ]
+        }
+      },
+      {
+        "id": "blue-hub-rim-left",
+        "shape": {
+          "kind": "box",
+          "center": [
+            4.6189,
+            4.5977,
+            1.632
+          ],
+          "size": [
+            1.0592,
+            0.0673,
+            0.3937
+          ]
+        }
+      },
+      {
+        "id": "red-hub-rim-left",
+        "shape": {
+          "kind": "box",
+          "center": [
+            11.9221,
+            3.4713,
+            1.632
+          ],
+          "size": [
+            1.0592,
+            0.0673,
+            0.3937
+          ]
+        }
+      },
+      {
+        "id": "blue-hub-rim-right",
+        "shape": {
+          "kind": "box",
+          "center": [
+            4.6189,
+            3.4713,
+            1.632
+          ],
+          "size": [
+            1.0592,
+            0.0673,
+            0.3937
+          ]
+        }
+      },
+      {
+        "id": "red-hub-rim-right",
+        "shape": {
+          "kind": "box",
+          "center": [
+            11.9221,
+            4.5977,
+            1.632
+          ],
+          "size": [
+            1.0592,
+            0.0673,
+            0.3937
+          ]
+        }
+      },
+      {
+        "id": "blue-bump-left",
+        "shape": {
+          "kind": "ridge",
+          "ridgeAxis": "y",
+          "center": [
+            4.6189,
+            5.5585,
+            0.0827
+          ],
+          "size": [
+            1.1278,
+            1.8542,
+            0.1654
+          ]
+        }
+      },
+      {
+        "id": "red-bump-left",
+        "shape": {
+          "kind": "ridge",
+          "ridgeAxis": "y",
+          "center": [
+            11.9221,
+            2.5105,
+            0.0827
+          ],
+          "size": [
+            1.1278,
+            1.8542,
+            0.1654
+          ]
+        }
+      },
+      {
+        "id": "blue-trench-post-left",
+        "shape": {
+          "kind": "box",
+          "center": [
+            4.6189,
+            6.638,
+            0.5112
+          ],
+          "size": [
+            0.3,
+            0.3048,
+            1.0223
+          ]
+        }
+      },
+      {
+        "id": "red-trench-post-left",
+        "shape": {
+          "kind": "box",
+          "center": [
+            11.9221,
+            1.431,
+            0.5112
+          ],
+          "size": [
+            0.3,
+            0.3048,
+            1.0223
+          ]
+        }
+      },
+      {
+        "id": "blue-trench-arm-left",
+        "shape": {
+          "kind": "box",
+          "center": [
+            4.6189,
+            7.4297,
+            0.7938
+          ],
+          "size": [
+            0.0749,
+            1.2786,
+            0.4572
+          ]
+        }
+      },
+      {
+        "id": "red-trench-arm-left",
+        "shape": {
+          "kind": "box",
+          "center": [
+            11.9221,
+            0.6393,
+            0.7938
+          ],
+          "size": [
+            0.0749,
+            1.2786,
+            0.4572
+          ]
+        }
+      },
+      {
+        "id": "blue-bump-right",
+        "shape": {
+          "kind": "ridge",
+          "ridgeAxis": "y",
+          "center": [
+            4.6189,
+            2.5105,
+            0.0827
+          ],
+          "size": [
+            1.1278,
+            1.8542,
+            0.1654
+          ]
+        }
+      },
+      {
+        "id": "red-bump-right",
+        "shape": {
+          "kind": "ridge",
+          "ridgeAxis": "y",
+          "center": [
+            11.9221,
+            5.5585,
+            0.0827
+          ],
+          "size": [
+            1.1278,
+            1.8542,
+            0.1654
+          ]
+        }
+      },
+      {
+        "id": "blue-trench-post-right",
+        "shape": {
+          "kind": "box",
+          "center": [
+            4.6189,
+            1.431,
+            0.5112
+          ],
+          "size": [
+            0.3,
+            0.3048,
+            1.0223
+          ]
+        }
+      },
+      {
+        "id": "red-trench-post-right",
+        "shape": {
+          "kind": "box",
+          "center": [
+            11.9221,
+            6.638,
+            0.5112
+          ],
+          "size": [
+            0.3,
+            0.3048,
+            1.0223
+          ]
+        }
+      },
+      {
+        "id": "blue-trench-arm-right",
+        "shape": {
+          "kind": "box",
+          "center": [
+            4.6189,
+            0.6393,
+            0.7938
+          ],
+          "size": [
+            0.0749,
+            1.2786,
+            0.4572
+          ]
+        }
+      },
+      {
+        "id": "red-trench-arm-right",
+        "shape": {
+          "kind": "box",
+          "center": [
+            11.9221,
+            7.4297,
+            0.7938
+          ],
+          "size": [
+            0.0749,
+            1.2786,
+            0.4572
+          ]
+        }
+      },
+      {
+        "id": "blue-tower-upright-left",
+        "shape": {
+          "kind": "box",
+          "center": [
+            1.0607,
+            4.1746,
+            0.9157
+          ],
+          "size": [
+            0.0889,
+            0.0381,
+            1.8313
+          ]
+        }
+      },
+      {
+        "id": "red-tower-upright-left",
+        "shape": {
+          "kind": "box",
+          "center": [
+            15.4803,
+            3.8944,
+            0.9157
+          ],
+          "size": [
+            0.0889,
+            0.0381,
+            1.8313
+          ]
+        }
+      },
+      {
+        "id": "blue-tower-upright-right",
+        "shape": {
+          "kind": "box",
+          "center": [
+            1.0607,
+            3.3174,
+            0.9157
+          ],
+          "size": [
+            0.0889,
+            0.0381,
+            1.8313
+          ]
+        }
+      },
+      {
+        "id": "red-tower-upright-right",
+        "shape": {
+          "kind": "box",
+          "center": [
+            15.4803,
+            4.7516,
+            0.9157
+          ],
+          "size": [
+            0.0889,
+            0.0381,
+            1.8313
+          ]
+        }
+      },
+      {
+        "id": "blue-tower-rung-low",
+        "shape": {
+          "kind": "box",
+          "center": [
+            1.0607,
+            3.746,
+            0.6858
+          ],
+          "size": [
+            0.0422,
+            1.1938,
+            0.0422
+          ]
+        }
+      },
+      {
+        "id": "red-tower-rung-low",
+        "shape": {
+          "kind": "box",
+          "center": [
+            15.4803,
+            4.323,
+            0.6858
+          ],
+          "size": [
+            0.0422,
+            1.1938,
+            0.0422
+          ]
+        }
+      },
+      {
+        "id": "blue-tower-rung-mid",
+        "shape": {
+          "kind": "box",
+          "center": [
+            1.0607,
+            3.746,
+            1.143
+          ],
+          "size": [
+            0.0422,
+            1.1938,
+            0.0422
+          ]
+        }
+      },
+      {
+        "id": "red-tower-rung-mid",
+        "shape": {
+          "kind": "box",
+          "center": [
+            15.4803,
+            4.323,
+            1.143
+          ],
+          "size": [
+            0.0422,
+            1.1938,
+            0.0422
+          ]
+        }
+      },
+      {
+        "id": "blue-tower-rung-high",
+        "shape": {
+          "kind": "box",
+          "center": [
+            1.0607,
+            3.746,
+            1.6002
+          ],
+          "size": [
+            0.0422,
+            1.1938,
+            0.0422
+          ]
+        }
+      },
+      {
+        "id": "red-tower-rung-high",
+        "shape": {
+          "kind": "box",
+          "center": [
+            15.4803,
+            4.323,
+            1.6002
+          ],
+          "size": [
+            0.0422,
+            1.1938,
+            0.0422
+          ]
+        }
+      }
+    ],
+    "goals": [
+      {
+        "id": "blue-hub",
+        "box": {
+          "center": [
+            4.6189,
+            4.0345,
+            1.632
+          ],
+          "size": [
+            0.9992,
+            0.9992,
+            0.3937
+          ]
+        },
+        "creditAlliance": "blue",
+        "recycle": {
+          "delaySeconds": 1,
+          "exit": {
+            "box": {
+              "center": [
+                5.3158,
+                4.0345,
+                0.0951
+              ],
+              "size": [
+                0.05,
+                0.955,
+                0.02
+              ]
+            },
+            "velocity": [
+              1.5,
+              0,
+              0
+            ]
+          }
+        }
+      },
+      {
+        "id": "red-hub",
+        "box": {
+          "center": [
+            11.9221,
+            4.0345,
+            1.632
+          ],
+          "size": [
+            0.9992,
+            0.9992,
+            0.3937
+          ]
+        },
+        "creditAlliance": "red",
+        "recycle": {
+          "delaySeconds": 1,
+          "exit": {
+            "box": {
+              "center": [
+                11.2252,
+                4.0345,
+                0.0951
+              ],
+              "size": [
+                0.05,
+                0.955,
+                0.02
+              ]
+            },
+            "velocity": [
+              -1.5,
+              0,
+              0
+            ]
+          }
+        }
+      }
+    ],
+    "zones": [
+      {
+        "id": "blue-alliance-zone",
+        "kind": "allianceZone",
+        "alliance": "blue",
+        "box": {
+          "center": [
+            2.011,
+            4.0345,
+            1
+          ],
+          "size": [
+            4.022,
+            8.069,
+            2
+          ]
+        }
+      },
+      {
+        "id": "red-alliance-zone",
+        "kind": "allianceZone",
+        "alliance": "red",
+        "box": {
+          "center": [
+            14.53,
+            4.0345,
+            1
+          ],
+          "size": [
+            4.022,
+            8.069,
+            2
+          ]
+        }
+      },
+      {
+        "id": "neutral-zone",
+        "kind": "neutralZone",
+        "box": {
+          "center": [
+            8.2705,
+            4.0345,
+            1
+          ],
+          "size": [
+            7.1882,
+            8.069,
+            2
+          ]
+        }
+      }
+    ]
+  },
+  "pieceTypes": [
+    {
+      "id": "fuel",
+      "name": "FUEL",
+      "shape": {
+        "kind": "sphere",
+        "radius": 0.0751
+      },
+      "mass": 0.215,
+      "friction": 0.7,
+      "restitution": 0.35
+    }
+  ],
+  "pieceSpawnAreas": [
+    {
+      "id": "blue-depot",
+      "type": "fuel",
+      "box": {
+        "center": [
+          0.3429,
+          5.9631,
+          0.0751
+        ],
+        "size": [
+          0.6858,
+          1.0668,
+          0.1501
+        ]
+      },
+      "count": 24,
+      "jitter": 0.005
+    },
+    {
+      "id": "red-depot",
+      "type": "fuel",
+      "box": {
+        "center": [
+          16.1981,
+          2.1059,
+          0.0751
+        ],
+        "size": [
+          0.6858,
+          1.0668,
+          0.1501
+        ]
+      },
+      "count": 24,
+      "jitter": 0.005
+    },
+    {
+      "id": "neutral-zone",
+      "type": "fuel",
+      "box": {
+        "center": [
+          8.2705,
+          4.0345,
+          0.0751
+        ],
+        "size": [
+          1.8288,
+          5.2324,
+          0.1501
+        ]
+      },
+      "count": 360,
+      "jitter": 0.01
+    }
+  ],
+  "preload": {
+    "type": "fuel",
+    "maxPerRobot": 8
+  },
+  "match": {
+    "periods": [
+      {
+        "id": "auto",
+        "durationSeconds": 20
+      },
+      {
+        "id": "transition",
+        "durationSeconds": 10
+      },
+      {
+        "id": "shift-1",
+        "durationSeconds": 25
+      },
+      {
+        "id": "shift-2",
+        "durationSeconds": 25
+      },
+      {
+        "id": "shift-3",
+        "durationSeconds": 25
+      },
+      {
+        "id": "shift-4",
+        "durationSeconds": 25
+      },
+      {
+        "id": "endgame",
+        "durationSeconds": 30
+      }
+    ]
+  },
+  "scoring": [
+    {
+      "id": "fuel-blue-hub",
+      "when": "pieceEntersGoal",
+      "goals": [
+        "blue-hub"
+      ],
+      "pieceTypes": [
+        "fuel"
+      ],
+      "points": {
+        "auto": 1,
+        "transition": 1,
+        "shift-1": 1,
+        "shift-2": 1,
+        "shift-3": 1,
+        "shift-4": 1,
+        "endgame": 1
+      }
+    },
+    {
+      "id": "fuel-red-hub",
+      "when": "pieceEntersGoal",
+      "goals": [
+        "red-hub"
+      ],
+      "pieceTypes": [
+        "fuel"
+      ],
+      "points": {
+        "auto": 1,
+        "transition": 1,
+        "shift-1": 1,
+        "shift-2": 1,
+        "shift-3": 1,
+        "shift-4": 1,
+        "endgame": 1
+      }
+    }
+  ],
+  "robotRules": {
+    "maxFramePerimeter": 2.794,
+    "maxHeight": 0.762,
+    "maxExtension": 0.3048,
+    "maxMass": 52.16
+  },
+  "mechanics": [
+    "rebuilt-hub-shifts"
+  ]
+}

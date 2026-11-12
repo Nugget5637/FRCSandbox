@@ -1,11 +1,30 @@
 import RAPIER from '@dimforge/rapier3d-deterministic-compat';
 import type { RigidBody, World } from '@dimforge/rapier3d-deterministic-compat';
 import { SIM_HZ, SIM_STEP_SECONDS } from './constants';
-import { boxContains, pointsFor, type Alliance, type GamePack, type PieceShape } from './pack';
+import { getMechanic, type MechanicContext, type MechanicInstance } from './mechanics';
+import {
+  boxContains,
+  pointsFor,
+  type Alliance,
+  type Box,
+  type GamePack,
+  type Goal,
+  type ObstacleShape,
+  type PieceShape,
+} from './pack';
 import { checkRobotRules, IDLE_INPUT, type RobotInput, type RobotSpec } from './robot';
 import { SeededRandom } from './rng';
 
 export const GRAVITY = 9.81;
+
+/** How long a robot must wait before recapturing a piece it just released. */
+export const RECAPTURE_COOLDOWN_SECONDS = 0.5;
+
+/** Rounded edges let box-shaped robots ride up ramps instead of catching on them. */
+const ROBOT_EDGE_RADIUS = 0.03;
+
+/** How far ridge obstacles extend below their box (into the floor). */
+const RIDGE_SINK = 0.03;
 
 let rapierReady: Promise<void> | undefined;
 
@@ -21,6 +40,8 @@ export interface RobotEntry {
   spec: RobotSpec;
   /** Starting position on the floor and heading (radians, counterclockwise from +x). */
   start: { x: number; y: number; yaw: number };
+  /** Pieces held at the start of the match. Limited by the pack's `preload` rule. */
+  preload?: number;
 }
 
 export interface SimulationOptions {
@@ -29,7 +50,11 @@ export interface SimulationOptions {
   seed?: number;
 }
 
-export type PieceState = 'field' | 'stored' | 'scored';
+/**
+ * field: loose on the field. stored: held by a robot. processing: inside a
+ * recycling goal, about to return to the field. scored: removed from play.
+ */
+export type PieceState = 'field' | 'stored' | 'processing' | 'scored';
 
 export type SimEvent =
   | { tick: number; type: 'periodStarted'; period: string }
@@ -43,6 +68,8 @@ export type SimEvent =
       goal: string;
       rule: string;
       alliance: Alliance;
+      /** False if a mechanic had the goal inactive, in which case points is 0. */
+      active: boolean;
       points: number;
     };
 
@@ -62,6 +89,12 @@ export interface PieceSnapshot {
   heldBy: string | null;
 }
 
+export interface GoalSnapshot {
+  id: string;
+  alliance: Alliance;
+  active: boolean;
+}
+
 export interface SimSnapshot {
   tick: number;
   time: number;
@@ -70,6 +103,7 @@ export interface SimSnapshot {
   score: Record<Alliance, number>;
   robots: RobotSnapshot[];
   pieces: PieceSnapshot[];
+  goals: GoalSnapshot[];
 }
 
 interface PieceRecord {
@@ -82,10 +116,10 @@ interface PieceRecord {
   /** The robot that last released this piece cannot recapture it until this tick. */
   recaptureBlockedFor: string | null;
   recaptureBlockedUntil: number;
+  /** For processing pieces: when and where they return to the field. */
+  returnTick: number;
+  returnGoal: Goal | null;
 }
-
-/** How long a robot must wait before recapturing a piece it just released. */
-export const RECAPTURE_COOLDOWN_SECONDS = 0.5;
 
 interface RobotRecord {
   entry: RobotEntry;
@@ -112,6 +146,7 @@ export class Simulation {
   private readonly robots: RobotRecord[] = [];
   private readonly pieces: PieceRecord[] = [];
   private readonly periods: PeriodWindow[];
+  private readonly mechanics: MechanicInstance[];
   private readonly events: SimEvent[] = [];
   private readonly score: Record<Alliance, number> = { red: 0, blue: 0 };
   private tickCount = 0;
@@ -134,6 +169,16 @@ export class Simulation {
           .join('; ');
         throw new Error(`robot "${robot.id}" breaks robot rules: ${detail}`);
       }
+      const preload = robot.preload ?? 0;
+      const maxPreload = pack.preload?.maxPerRobot ?? 0;
+      if (preload > maxPreload) {
+        throw new Error(
+          `robot "${robot.id}" preloads ${preload} pieces; the limit is ${maxPreload}`,
+        );
+      }
+      if (preload > robot.spec.intake.capacity) {
+        throw new Error(`robot "${robot.id}" preloads more pieces than its capacity`);
+      }
     }
 
     let tick = 0;
@@ -147,29 +192,36 @@ export class Simulation {
       return window;
     });
 
+    this.mechanics = pack.mechanics.map((id) => {
+      const module = getMechanic(id);
+      if (!module) throw new Error(`unknown mechanic "${id}"`);
+      return module.create(pack);
+    });
+
     this.world = new RAPIER.World({ x: 0, y: 0, z: -GRAVITY });
     this.world.timestep = SIM_STEP_SECONDS;
 
     this.buildField();
-    pack.pieceSpawns.forEach((spawn, index) => {
-      const type = pack.pieceTypes.find((t) => t.id === spawn.type);
-      if (!type) throw new Error(`unknown piece type "${spawn.type}"`);
-      const record: PieceRecord = {
-        id: index,
-        type: type.id,
-        shape: type.shape,
-        state: 'field',
-        body: null,
-        heldBy: null,
-        recaptureBlockedFor: null,
-        recaptureBlockedUntil: 0,
-      };
+    for (const spawn of pack.pieceSpawns) {
       const [x, y, z] = spawn.position;
-      record.body = this.createPieceBody(type.id, x, y, z, { x: 0, y: 0, z: 0 });
-      this.pieces.push(record);
-    });
+      this.addPiece(spawn.type, x, y, z);
+    }
+    for (const area of pack.pieceSpawnAreas) {
+      for (const [x, y, z] of this.gridPositions(area.type, area.box, area.count, area.jitter)) {
+        this.addPiece(area.type, x, y, z);
+      }
+    }
 
-    for (const entry of robots) this.robots.push(this.createRobot(entry));
+    for (const entry of robots) {
+      const robot = this.createRobot(entry);
+      for (let i = 0; i < (entry.preload ?? 0) && pack.preload; i++) {
+        const piece = this.addPiece(pack.preload.type, 0, 0, 0, false);
+        piece.state = 'stored';
+        piece.heldBy = entry.id;
+        robot.stored.push(piece.id);
+      }
+      this.robots.push(robot);
+    }
 
     const first = this.periods[0];
     if (first) this.events.push({ tick: 0, type: 'periodStarted', period: first.id });
@@ -207,11 +259,13 @@ export class Simulation {
 
     this.world.step();
     this.tickCount += 1;
+    this.returnProcessedPieces();
     this.checkScoring();
     this.advancePeriod();
   }
 
   snapshot(): SimSnapshot {
+    const context = this.context();
     return {
       tick: this.tickCount,
       time: this.tickCount * SIM_STEP_SECONDS,
@@ -239,6 +293,11 @@ export class Simulation {
           heldBy: p.heldBy,
         };
       }),
+      goals: this.pack.field.goals.map((g) => ({
+        id: g.id,
+        alliance: g.creditAlliance,
+        active: context ? this.isGoalActive(g, context) : false,
+      })),
     };
   }
 
@@ -249,10 +308,26 @@ export class Simulation {
     this.disposed = true;
   }
 
+  private context(): MechanicContext | null {
+    const window = this.periods[this.periodIndex];
+    if (!window) return null;
+    return {
+      tick: this.tickCount,
+      period: window.id,
+      previousPeriod: this.periods[this.periodIndex - 1]?.id ?? null,
+      ticksIntoPeriod: this.tickCount - window.startTick,
+      random: this.random,
+    };
+  }
+
+  private isGoalActive(goal: Goal, context: MechanicContext): boolean {
+    return this.mechanics.every((m) => m.isGoalActive?.(goal, context) ?? true);
+  }
+
   private buildField(): void {
     const { size, wallHeight, obstacles } = this.pack.field;
     const [length, width] = size;
-    const fixed = (cx: number, cy: number, cz: number, hx: number, hy: number, hz: number) => {
+    const fixedBox = (cx: number, cy: number, cz: number, hx: number, hy: number, hz: number) => {
       const body = this.world.createRigidBody(
         RAPIER.RigidBodyDesc.fixed().setTranslation(cx, cy, cz),
       );
@@ -260,17 +335,94 @@ export class Simulation {
     };
 
     const t = 0.5; // half-thickness of floor and walls
-    fixed(length / 2, width / 2, -t, length / 2 + 2 * t, width / 2 + 2 * t, t);
-    fixed(-t, width / 2, wallHeight / 2, t, width / 2 + 2 * t, wallHeight / 2);
-    fixed(length + t, width / 2, wallHeight / 2, t, width / 2 + 2 * t, wallHeight / 2);
-    fixed(length / 2, -t, wallHeight / 2, length / 2, t, wallHeight / 2);
-    fixed(length / 2, width + t, wallHeight / 2, length / 2, t, wallHeight / 2);
+    fixedBox(length / 2, width / 2, -t, length / 2 + 2 * t, width / 2 + 2 * t, t);
+    fixedBox(-t, width / 2, wallHeight / 2, t, width / 2 + 2 * t, wallHeight / 2);
+    fixedBox(length + t, width / 2, wallHeight / 2, t, width / 2 + 2 * t, wallHeight / 2);
+    fixedBox(length / 2, -t, wallHeight / 2, length / 2, t, wallHeight / 2);
+    fixedBox(length / 2, width + t, wallHeight / 2, length / 2, t, wallHeight / 2);
 
-    for (const obstacle of obstacles) {
-      const [cx, cy, cz] = obstacle.box.center;
-      const [sx, sy, sz] = obstacle.box.size;
-      fixed(cx, cy, cz, sx / 2, sy / 2, sz / 2);
+    for (const obstacle of obstacles) this.addObstacle(obstacle.shape);
+  }
+
+  private addObstacle(shape: ObstacleShape): void {
+    const [cx, cy, cz] = shape.center;
+    const [sx, sy, sz] = shape.size;
+    const body = this.world.createRigidBody(
+      RAPIER.RigidBodyDesc.fixed().setTranslation(cx, cy, cz),
+    );
+    if (shape.kind === 'box') {
+      this.world.createCollider(
+        RAPIER.ColliderDesc.cuboid(sx / 2, sy / 2, sz / 2).setFriction(0.8),
+        body,
+      );
+      return;
     }
+    // Triangular prism: base fills the box footprint, peak runs along ridgeAxis at the top.
+    // The base is sunk slightly below the box so a robot sliding on the floor meets the
+    // sloped face instead of the zero-height toe edge, which would stop it dead.
+    const hx = sx / 2;
+    const hy = sy / 2;
+    const hz = sz / 2;
+    const base = -hz - RIDGE_SINK;
+    const points =
+      shape.ridgeAxis === 'y'
+        ? [-hx, -hy, base, hx, -hy, base, 0, -hy, hz, -hx, hy, base, hx, hy, base, 0, hy, hz]
+        : [-hx, -hy, base, -hx, hy, base, -hx, 0, hz, hx, -hy, base, hx, hy, base, hx, 0, hz];
+    const hull = RAPIER.ColliderDesc.convexHull(new Float32Array(points));
+    if (!hull) throw new Error('could not build ridge obstacle');
+    this.world.createCollider(hull.setFriction(0.8), body);
+  }
+
+  /** Evenly spaced positions filling a box from the floor up, one layer at a time. */
+  private gridPositions(
+    type: string,
+    box: Box,
+    count: number,
+    jitter: number,
+  ): [number, number, number][] {
+    const pieceType = this.pack.pieceTypes.find((t) => t.id === type);
+    if (!pieceType) throw new Error(`unknown piece type "${type}"`);
+    const radius = boundingRadius(pieceType.shape);
+    const spacing = radius * 2 * 1.02;
+    const [cx, cy, cz] = box.center;
+    const [sx, sy, sz] = box.size;
+    const columns = Math.max(1, Math.floor(sx / spacing));
+    const rows = Math.max(1, Math.floor(sy / spacing));
+    const startX = cx - ((columns - 1) * spacing) / 2;
+    const startY = cy - ((rows - 1) * spacing) / 2;
+    const floorZ = cz - sz / 2 + radius;
+
+    const positions: [number, number, number][] = [];
+    for (let i = 0; i < count; i++) {
+      const layer = Math.floor(i / (columns * rows));
+      const inLayer = i % (columns * rows);
+      const offset = jitter > 0 ? () => this.random.range(-jitter, jitter) : () => 0;
+      positions.push([
+        startX + (inLayer % columns) * spacing + offset(),
+        startY + Math.floor(inLayer / columns) * spacing + offset(),
+        floorZ + layer * spacing,
+      ]);
+    }
+    return positions;
+  }
+
+  private addPiece(type: string, x: number, y: number, z: number, onField = true): PieceRecord {
+    const pieceType = this.pack.pieceTypes.find((t) => t.id === type);
+    if (!pieceType) throw new Error(`unknown piece type "${type}"`);
+    const record: PieceRecord = {
+      id: this.pieces.length,
+      type,
+      shape: pieceType.shape,
+      state: 'field',
+      body: onField ? this.createPieceBody(type, x, y, z, { x: 0, y: 0, z: 0 }) : null,
+      heldBy: null,
+      recaptureBlockedFor: null,
+      recaptureBlockedUntil: 0,
+      returnTick: 0,
+      returnGoal: null,
+    };
+    this.pieces.push(record);
+    return record;
   }
 
   private createPieceBody(
@@ -297,7 +449,12 @@ export class Simulation {
             type.shape.size[2] / 2,
           );
     this.world.createCollider(
-      collider.setMass(type.mass).setFriction(type.friction).setRestitution(type.restitution),
+      collider
+        .setMass(type.mass)
+        .setFriction(type.friction)
+        // Max outranks the robots' Min rule, so pieces keep their grip against robots.
+        .setFrictionCombineRule(RAPIER.CoefficientCombineRule.Max)
+        .setRestitution(type.restitution),
       body,
     );
     // New bodies can otherwise join a sleeping island and hang in midair.
@@ -308,18 +465,27 @@ export class Simulation {
   private createRobot(entry: RobotEntry): RobotRecord {
     const { frame, mass } = entry.spec;
     const { x, y, yaw } = entry.start;
+    const r = Math.min(ROBOT_EDGE_RADIUS, frame.height / 4, frame.width / 4, frame.length / 4);
     const body = this.world.createRigidBody(
       RAPIER.RigidBodyDesc.dynamic()
         .setTranslation(x, y, frame.height / 2)
         .setRotation({ x: 0, y: 0, z: Math.sin(yaw / 2), w: Math.cos(yaw / 2) })
-        // Milestone 1 robots only turn about z. Tipping arrives with the bot creator.
+        // Robots only turn about z for now. Tipping arrives with the bot creator.
         .enabledRotations(false, false, true)
         .setCanSleep(false),
     );
     this.world.createCollider(
-      RAPIER.ColliderDesc.cuboid(frame.length / 2, frame.width / 2, frame.height / 2)
+      RAPIER.ColliderDesc.roundCuboid(
+        frame.length / 2 - r,
+        frame.width / 2 - r,
+        frame.height / 2 - r,
+        r,
+      )
         .setMass(mass)
-        .setFriction(0.1),
+        // Robots are driven by setting velocity, not by wheel friction. Zero friction lets
+        // the box-shaped body slide up ramps instead of sticking to them.
+        .setFriction(0)
+        .setFrictionCombineRule(RAPIER.CoefficientCombineRule.Min),
       body,
     );
     return { entry, body, stored: [], releaseWasPressed: false };
@@ -356,6 +522,7 @@ export class Simulation {
     const yaw = yawOf(robot.body);
     const cos = Math.cos(yaw);
     const sin = Math.sin(yaw);
+    const floor = t.z - frame.height / 2;
 
     for (const piece of this.pieces) {
       if (robot.stored.length >= intake.capacity) return;
@@ -372,7 +539,13 @@ export class Simulation {
       const forward = relX * cos + relY * sin;
       const side = -relX * sin + relY * cos;
       const inFront = forward >= frame.length / 2 && forward <= frame.length / 2 + intake.reach;
-      if (inFront && Math.abs(side) <= intake.width / 2 && p.z <= frame.height) {
+      const height = p.z - floor;
+      if (
+        inFront &&
+        Math.abs(side) <= intake.width / 2 &&
+        height >= -0.05 &&
+        height <= frame.height
+      ) {
         this.world.removeRigidBody(piece.body);
         piece.body = null;
         piece.state = 'stored';
@@ -401,12 +574,13 @@ export class Simulation {
     const radius = boundingRadius(piece.shape);
     const offset = frame.length / 2 + radius + 0.02;
     const horizontal = release.speed * Math.cos(release.pitch);
+    const floor = t.z - frame.height / 2;
 
     piece.body = this.createPieceBody(
       piece.type,
       t.x + Math.cos(yaw) * offset,
       t.y + Math.sin(yaw) * offset,
-      release.height,
+      floor + release.height,
       {
         x: v.x + Math.cos(yaw) * horizontal,
         y: v.y + Math.sin(yaw) * horizontal,
@@ -426,8 +600,8 @@ export class Simulation {
   }
 
   private checkScoring(): void {
-    const period = this.currentPeriod;
-    if (period === null) return;
+    const context = this.context();
+    if (context === null) return;
 
     for (const piece of this.pieces) {
       if (piece.state !== 'field' || !piece.body) continue;
@@ -440,11 +614,19 @@ export class Simulation {
       );
       if (rules.length === 0) continue;
 
+      const active = this.isGoalActive(goal, context);
       this.world.removeRigidBody(piece.body);
       piece.body = null;
-      piece.state = 'scored';
+      if (goal.recycle) {
+        piece.state = 'processing';
+        piece.returnGoal = goal;
+        piece.returnTick = this.tickCount + Math.round(goal.recycle.delaySeconds * SIM_HZ);
+      } else {
+        piece.state = 'scored';
+      }
+
       for (const rule of rules) {
-        const points = pointsFor(rule, period);
+        const points = active ? pointsFor(rule, context.period) : 0;
         this.score[goal.creditAlliance] += points;
         this.events.push({
           tick: this.tickCount,
@@ -453,9 +635,32 @@ export class Simulation {
           goal: goal.id,
           rule: rule.id,
           alliance: goal.creditAlliance,
+          active,
           points,
         });
       }
+      const info = { goal, alliance: goal.creditAlliance, pieceType: piece.type, active };
+      for (const mechanic of this.mechanics) mechanic.onPieceScored?.(info, context);
+    }
+  }
+
+  private returnProcessedPieces(): void {
+    for (const piece of this.pieces) {
+      if (piece.state !== 'processing' || this.tickCount < piece.returnTick) continue;
+      const exit = piece.returnGoal?.recycle?.exit;
+      if (!exit) continue;
+      const [cx, cy, cz] = exit.box.center;
+      const [sx, sy, sz] = exit.box.size;
+      const [vx, vy, vz] = exit.velocity;
+      piece.body = this.createPieceBody(
+        piece.type,
+        cx + this.random.range(-sx / 2, sx / 2),
+        cy + this.random.range(-sy / 2, sy / 2),
+        cz + this.random.range(-sz / 2, sz / 2),
+        { x: vx, y: vy, z: vz },
+      );
+      piece.state = 'field';
+      piece.returnGoal = null;
     }
   }
 

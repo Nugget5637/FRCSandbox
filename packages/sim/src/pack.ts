@@ -2,7 +2,8 @@ import { z } from 'zod';
 import { getMechanic, knownMechanicIds } from './mechanics';
 
 /**
- * Game pack format, version 1.
+ * Game pack format, version 1 (pre-release draft; may change until the first
+ * public release).
  *
  * A game pack describes one season: field, game pieces, match timing, scoring,
  * and robot rules. All values use SI units (m, kg, s, rad) and WPILib field
@@ -25,6 +26,23 @@ export type Alliance = z.output<typeof AllianceSchema>;
 const BoxSchema = z.object({ center: vec3, size: size3 });
 export type Box = z.output<typeof BoxSchema>;
 
+/**
+ * Solid field geometry.
+ * - box: an axis-aligned solid box.
+ * - ridge: a triangular prism filling the bounding box, with its peak line
+ *   running along `ridgeAxis` at the top center. Used for bumps and ramps.
+ */
+const ObstacleShapeSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('box'), center: vec3, size: size3 }),
+  z.object({
+    kind: z.literal('ridge'),
+    center: vec3,
+    size: size3,
+    ridgeAxis: z.enum(['x', 'y']),
+  }),
+]);
+export type ObstacleShape = z.output<typeof ObstacleShapeSchema>;
+
 const PieceShapeSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('sphere'), radius: positive }),
   z.object({ kind: z.literal('box'), size: size3 }),
@@ -39,6 +57,32 @@ const PieceTypeSchema = z.object({
   friction: nonNegative,
   restitution: z.number().min(0).max(1),
 });
+
+const GoalSchema = z.object({
+  id,
+  box: BoxSchema,
+  creditAlliance: AllianceSchema,
+  /**
+   * If set, scored pieces come back onto the field after a delay instead of
+   * leaving the match. They appear at a random point in `exit.box` moving at
+   * `exit.velocity`.
+   */
+  recycle: z
+    .object({
+      delaySeconds: nonNegative,
+      exit: z.object({ box: BoxSchema, velocity: vec3 }),
+    })
+    .optional(),
+});
+export type Goal = z.output<typeof GoalSchema>;
+
+const ZoneSchema = z.object({
+  id,
+  kind: z.enum(['allianceZone', 'neutralZone', 'other']),
+  alliance: AllianceSchema.optional(),
+  box: BoxSchema,
+});
+export type Zone = z.output<typeof ZoneSchema>;
 
 const ScoringRuleSchema = z.object({
   id,
@@ -65,11 +109,29 @@ export const GamePackSchema = z
       /** Field length (x) and width (y). */
       size: z.tuple([positive, positive]),
       wallHeight: positive,
-      obstacles: z.array(z.object({ id, box: BoxSchema })).default([]),
-      goals: z.array(z.object({ id, box: BoxSchema, creditAlliance: AllianceSchema })).min(1),
+      obstacles: z.array(z.object({ id, shape: ObstacleShapeSchema })).default([]),
+      goals: z.array(GoalSchema).min(1),
+      /** Named areas used for display and future rules. They have no physics. */
+      zones: z.array(ZoneSchema).default([]),
     }),
     pieceTypes: z.array(PieceTypeSchema).min(1),
-    pieceSpawns: z.array(z.object({ type: id, position: vec3 })),
+    /** Individually placed pieces. */
+    pieceSpawns: z.array(z.object({ type: id, position: vec3 })).default([]),
+    /** Pieces arranged in a grid inside a box, filling layers from the bottom. */
+    pieceSpawnAreas: z
+      .array(
+        z.object({
+          id,
+          type: id,
+          box: BoxSchema,
+          count: z.number().int().positive(),
+          /** Random offset applied to each position, in meters. */
+          jitter: nonNegative.default(0),
+        }),
+      )
+      .default([]),
+    /** Pieces a robot may hold at the start of the match. */
+    preload: z.object({ type: id, maxPerRobot: z.number().int().nonnegative() }).optional(),
     match: z.object({
       periods: z.array(z.object({ id, durationSeconds: positive })).min(1),
     }),
@@ -105,9 +167,19 @@ export const GamePackSchema = z
       'obstacle',
     );
     checkUnique(
+      pack.field.zones.map((z) => z.id),
+      ['field', 'zones'],
+      'zone',
+    );
+    checkUnique(
       pack.pieceTypes.map((p) => p.id),
       ['pieceTypes'],
       'piece type',
+    );
+    checkUnique(
+      pack.pieceSpawnAreas.map((a) => a.id),
+      ['pieceSpawnAreas'],
+      'spawn area',
     );
     checkUnique(
       pack.match.periods.map((p) => p.id),
@@ -124,14 +196,31 @@ export const GamePackSchema = z
     const pieceIds = new Set(pack.pieceTypes.map((p) => p.id));
     const periodIds = new Set(pack.match.periods.map((p) => p.id));
     const [length, width] = pack.field.size;
+    const insideField = ([x, y, z]: readonly number[]) =>
+      x! >= 0 && x! <= length && y! >= 0 && y! <= width && z! >= 0;
+    const knownPiece = (type: string, path: (string | number)[]) => {
+      if (!pieceIds.has(type)) issue(path, `unknown piece type "${type}"`);
+    };
 
     pack.pieceSpawns.forEach((spawn, i) => {
-      if (!pieceIds.has(spawn.type)) {
-        issue(['pieceSpawns', i, 'type'], `unknown piece type "${spawn.type}"`);
-      }
-      const [x, y, z] = spawn.position;
-      if (x < 0 || x > length || y < 0 || y > width || z < 0) {
+      knownPiece(spawn.type, ['pieceSpawns', i, 'type']);
+      if (!insideField(spawn.position)) {
         issue(['pieceSpawns', i, 'position'], 'spawn position is outside the field');
+      }
+    });
+
+    pack.pieceSpawnAreas.forEach((area, i) => {
+      knownPiece(area.type, ['pieceSpawnAreas', i, 'type']);
+      if (!insideField(area.box.center)) {
+        issue(['pieceSpawnAreas', i, 'box'], 'spawn area is outside the field');
+      }
+    });
+
+    if (pack.preload) knownPiece(pack.preload.type, ['preload', 'type']);
+
+    pack.field.goals.forEach((goal, i) => {
+      if (goal.recycle && !insideField(goal.recycle.exit.box.center)) {
+        issue(['field', 'goals', i, 'recycle', 'exit'], 'recycle exit is outside the field');
       }
     });
 
@@ -139,11 +228,7 @@ export const GamePackSchema = z
       rule.goals.forEach((goal, j) => {
         if (!goalIds.has(goal)) issue(['scoring', i, 'goals', j], `unknown goal "${goal}"`);
       });
-      rule.pieceTypes?.forEach((type, j) => {
-        if (!pieceIds.has(type)) {
-          issue(['scoring', i, 'pieceTypes', j], `unknown piece type "${type}"`);
-        }
-      });
+      rule.pieceTypes?.forEach((type, j) => knownPiece(type, ['scoring', i, 'pieceTypes', j]));
       for (const period of Object.keys(rule.points)) {
         if (!periodIds.has(period)) {
           issue(['scoring', i, 'points', period], `unknown match period "${period}"`);
@@ -152,12 +237,17 @@ export const GamePackSchema = z
     });
 
     pack.mechanics.forEach((mechanic, i) => {
-      if (!getMechanic(mechanic)) {
+      const module = getMechanic(mechanic);
+      if (!module) {
         const known = knownMechanicIds();
         issue(
           ['mechanics', i],
           `unknown mechanic "${mechanic}" (known: ${known.length ? known.join(', ') : 'none'})`,
         );
+        return;
+      }
+      for (const problem of module.validate?.(pack) ?? []) {
+        issue(['mechanics', i], `${mechanic}: ${problem}`);
       }
     });
   });

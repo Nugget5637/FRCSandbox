@@ -70,7 +70,8 @@ describe('Simulation', () => {
     sim.step({ 'blue-1': input({ drive: { x: 1, y: 0 } }) });
     const speed = sim.snapshot().robots[0]!.velocity.x;
     expect(speed).toBeGreaterThan(0);
-    expect(speed).toBeLessThanOrEqual(TEST_ROBOT_SPEC.maxAcceleration / SIM_HZ + 1e-6);
+    // Rapier stores velocities as 32-bit floats, so allow a tiny rounding margin.
+    expect(speed).toBeLessThanOrEqual(TEST_ROBOT_SPEC.maxAcceleration / SIM_HZ + 1e-5);
     sim.dispose();
   });
 
