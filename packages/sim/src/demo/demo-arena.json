@@ -1,0 +1,61 @@
+{
+  "formatVersion": 1,
+  "id": "demo-arena",
+  "name": "Demo Arena",
+  "season": 0,
+  "source": { "manualRevision": "none (debug demo)" },
+  "field": {
+    "size": [10, 5],
+    "wallHeight": 0.5,
+    "obstacles": [
+      { "id": "corner-bump", "box": { "center": [5, 0.6, 0.05], "size": [1, 1, 0.1] } }
+    ],
+    "goals": [
+      {
+        "id": "blue-low-goal",
+        "box": { "center": [6.1, 2.5, 0.3], "size": [1, 1.2, 0.6] },
+        "creditAlliance": "blue"
+      }
+    ]
+  },
+  "pieceTypes": [
+    {
+      "id": "ball",
+      "name": "Foam ball",
+      "shape": { "kind": "sphere", "radius": 0.075 },
+      "mass": 0.2,
+      "friction": 0.6,
+      "restitution": 0.3
+    }
+  ],
+  "pieceSpawns": [
+    { "type": "ball", "position": [2.6, 1.4, 0.075] },
+    { "type": "ball", "position": [3.0, 2.5, 0.075] },
+    { "type": "ball", "position": [2.6, 3.6, 0.075] },
+    { "type": "ball", "position": [3.8, 1.2, 0.075] },
+    { "type": "ball", "position": [3.8, 3.8, 0.075] },
+    { "type": "ball", "position": [2.2, 2.5, 0.075] }
+  ],
+  "match": {
+    "periods": [
+      { "id": "auto", "durationSeconds": 15 },
+      { "id": "teleop", "durationSeconds": 135 }
+    ]
+  },
+  "scoring": [
+    {
+      "id": "low-goal",
+      "when": "pieceEntersGoal",
+      "goals": ["blue-low-goal"],
+      "pieceTypes": ["ball"],
+      "points": { "auto": 4, "teleop": 2 }
+    }
+  ],
+  "robotRules": {
+    "maxFramePerimeter": 3.8,
+    "maxHeight": 1.1,
+    "maxExtension": 0.4,
+    "maxMass": 60
+  },
+  "mechanics": []
+}

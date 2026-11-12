@@ -79,7 +79,13 @@ interface PieceRecord {
   state: PieceState;
   body: RigidBody | null;
   heldBy: string | null;
+  /** The robot that last released this piece cannot recapture it until this tick. */
+  recaptureBlockedFor: string | null;
+  recaptureBlockedUntil: number;
 }
+
+/** How long a robot must wait before recapturing a piece it just released. */
+export const RECAPTURE_COOLDOWN_SECONDS = 0.5;
 
 interface RobotRecord {
   entry: RobotEntry;
@@ -155,6 +161,8 @@ export class Simulation {
         state: 'field',
         body: null,
         heldBy: null,
+        recaptureBlockedFor: null,
+        recaptureBlockedUntil: 0,
       };
       const [x, y, z] = spawn.position;
       record.body = this.createPieceBody(type.id, x, y, z, { x: 0, y: 0, z: 0 });
@@ -292,6 +300,8 @@ export class Simulation {
       collider.setMass(type.mass).setFriction(type.friction).setRestitution(type.restitution),
       body,
     );
+    // New bodies can otherwise join a sleeping island and hang in midair.
+    body.wakeUp();
     return body;
   }
 
@@ -350,6 +360,12 @@ export class Simulation {
     for (const piece of this.pieces) {
       if (robot.stored.length >= intake.capacity) return;
       if (piece.state !== 'field' || !piece.body) continue;
+      if (
+        piece.recaptureBlockedFor === robot.entry.id &&
+        this.tickCount < piece.recaptureBlockedUntil
+      ) {
+        continue;
+      }
       const p = piece.body.translation();
       const relX = p.x - t.x;
       const relY = p.y - t.y;
@@ -399,6 +415,8 @@ export class Simulation {
     );
     piece.state = 'field';
     piece.heldBy = null;
+    piece.recaptureBlockedFor = robot.entry.id;
+    piece.recaptureBlockedUntil = this.tickCount + Math.round(RECAPTURE_COOLDOWN_SECONDS * SIM_HZ);
     this.events.push({
       tick: this.tickCount,
       type: 'pieceReleased',

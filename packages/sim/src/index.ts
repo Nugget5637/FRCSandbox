@@ -29,6 +29,14 @@ export {
   type RuleViolation,
 } from './robot';
 export { SeededRandom } from './rng';
+export {
+  DEMO_ROBOT,
+  DEMO_ROBOT_SPEC,
+  createDemoController,
+  demoArena,
+  type DemoController,
+  type DemoPhase,
+} from './demo/demo';
 export { getMechanic, knownMechanicIds, type MechanicModule } from './mechanics';
 export {
   GRAVITY,
