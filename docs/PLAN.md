@@ -132,6 +132,8 @@ Full detail and status live in [PROGRESS.md](../PROGRESS.md) and [milestones.csv
 
 Build packs by hand (2 and 5) before building tools that automate pack creation (6 and 7).
 
+Milestone 5 has grown beyond just a second pack: see [milestone-5-scope.md](milestone-5-scope.md) for the deferred format features folded into it (hub panels and net, human player station, out-of-bounds re-entry).
+
 ## 9. Decision log
 
 | Date       | Decision                                                           | Reason                                                                          |
