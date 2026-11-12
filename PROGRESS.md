@@ -7,17 +7,17 @@ This file is the source of truth for project status. Each work session updates t
 
 ## Milestone status
 
-| #   | Milestone                  | Status      | %   | Last updated | Note                                |
-| --- | -------------------------- | ----------- | --- | ------------ | ----------------------------------- |
-| 0   | Project skeleton & plan    | Done        | 100 | 2026-11-11   | Tooling, CI, plan, steering         |
-| 1   | Core engine & pack format  | Done        | 100 | 2026-11-11   | 3D Rapier engine, pack v1, 23 tests |
-| 2   | REBUILT pack (by hand)     | Done        | 100 | 2026-11-11   | Cited pack, hub shifts, 36 tests    |
-| 3   | 3D rendering & driving     | Not started | 0   | —            | First phone performance test        |
-| 4   | 3D bot creator mode        | Not started | 0   | —            | Core player experience              |
-| 5   | Second pack (by hand)      | Not started | 0   | —            | Proves the template idea            |
-| 6   | CAD pipeline               | Not started | 0   | —            | After the format is proven          |
-| 7   | Manual-reading assist      | Not started | 0   | —            | Human-verified drafts               |
-| 8   | Polish & kickoff readiness | Not started | 0   | —            | Polish last                         |
+| #   | Milestone                  | Status      | %   | Last updated | Note                                 |
+| --- | -------------------------- | ----------- | --- | ------------ | ------------------------------------ |
+| 0   | Project skeleton & plan    | Done        | 100 | 2026-11-11   | Tooling, CI, plan, steering          |
+| 1   | Core engine & pack format  | Done        | 100 | 2026-11-11   | 3D Rapier engine, pack v1, 23 tests  |
+| 2   | REBUILT pack (by hand)     | Done        | 100 | 2026-11-11   | Cited pack, hub shifts, 36 tests     |
+| 3   | 3D rendering & driving     | Done        | 100 | 2026-11-11   | Three.js, 3 cameras, touch, 47 tests |
+| 4   | 3D bot creator mode        | Not started | 0   | —            | Core player experience               |
+| 5   | Second pack (by hand)      | Not started | 0   | —            | Proves the template idea             |
+| 6   | CAD pipeline               | Not started | 0   | —            | After the format is proven           |
+| 7   | Manual-reading assist      | Not started | 0   | —            | Human-verified drafts                |
+| 8   | Polish & kickoff readiness | Not started | 0   | —            | Polish last                          |
 
 ## Milestone 0 checklist
 
@@ -50,6 +50,22 @@ This file is the source of truth for project status. Each work session updates t
 - [ ] Robot tipping (rotations other than yaw are locked until the bot creator)
 - [ ] Extension limits (`maxExtension` is stored but not checked until mechanisms exist)
 
+## Milestone 3 checklist
+
+- [x] Three.js WebGL2 renderer: carpet, structures, ramps, goals, instanced game pieces
+- [x] Placeholder robot mesh (real geometry comes with the bot creator in M4)
+- [x] Chase camera (locked behind the robot, robot-relative driving)
+- [x] Broadcast camera (behind the blue wall, follows the robot, quartic ease-out zoom at the alliance line, field-relative)
+- [x] Driver station cameras 1-3 (eye height behind the wall, field-relative)
+- [x] Tab cycles cameras; each sets its natural control frame
+- [x] Keyboard, gamepad, and on-screen touch controls
+- [x] HUD: score, clock, hub status, event log, controls
+- [x] Fixed-timestep loop with interpolated rendering
+- [x] Bundle split so physics/three/app load in parallel
+- [x] 47 tests (42 engine + 5 renderer scene-graph and camera)
+- [ ] Owner confirms visuals and camera feel in a browser (I can't screenshot in the sandbox)
+- [ ] Phone performance check on a real device
+
 ## Milestone 2 checklist
 
 - [x] REBUILT pack generated from cited measurements (`game-packs/rebuilt-2026/generate.mjs`, `SOURCES.md`)
@@ -65,7 +81,8 @@ This file is the source of truth for project status. Each work session updates t
 
 ## Credit notes
 
-- Milestone 0 estimate was about 40 credits. Record the measured cost from the Kiro usage page here: ______
+- Measured costs from the owner (Kiro usage page): M0 = 17.52, M1 = 18.03, M2 = 38.64, carpet fix = 17.59. Estimates had been about 4x too high.
+- Remaining estimates were rescaled to roughly 0.3x the originals: M3 ~90, M4 ~135, M5 ~50, M6 ~90, M7 ~60, M8 ~105. Budget 500-700 total for fix-up rounds.
 - Use the measured cost to recalibrate later estimates.
 - Switching to 3D raised the estimates for Milestones 1–5 and 8 by about 370 credits combined (see `docs/milestones.csv`). Milestone 4 changed the most, from about 300 to about 450.
 
@@ -78,3 +95,4 @@ This file is the source of truth for project status. Each work session updates t
 - 2026-11-11: Added a temporary top-down debug view (owner request, outside the milestone plan). `npm run dev` now shows the demo arena running the real engine: a scripted robot collects six balls and scores them, or the owner can drive manually. Engine fixes found while building it: a robot can no longer recapture a ball in the same instant it releases it (0.5 s cooldown), and released balls are woken so they can't hang in midair. Known issue: the client bundle is 4.5 MB because this Rapier build embeds its WebAssembly; fix in Milestone 3 by loading the WebAssembly as a separate file. 24 tests pass.
 - 2026-11-11: Completed Milestone 2. Built the REBUILT pack from the 2026 manual (through final Team Update 22), the WPILib AprilTag layout, the inspection checklist, and Team 6328's public field constants. Added the `rebuilt-hub-shifts` mechanic and the format features the season needed. Engine fixes: robots now slide up ramps (zero friction and rounded edges), and ridge bases sit slightly below the floor so robots don't catch on the toe. 36 tests pass. Not modeled yet: climbing, ranking points, human players, fouls. Next: Milestone 3, 3D rendering and driving.
 - 2026-11-11: Carpet and surface materials (owner request). Fixed a bug where the floor forced at least 0.8 friction on every game piece, ignoring each piece's own value. Added a carpet material to the pack format (defaulting to the standard FRC carpet), wall and obstacle surfaces, geometric-mean combining for every contact, and rolling resistance for round pieces, which Rapier lacks. Carpet values are estimates; `docs/PACK_FORMAT.md` explains how to measure them. 42 tests pass.
+- 2026-11-11: Completed Milestone 3. Replaced the top-down debug view with a Three.js 3D view of the REBUILT field: carpet, structures, goals, and up to ~456 instanced fuel, with a placeholder robot (real geometry comes with the bot creator in M4). Added three driver cameras cycled with Tab: chase (locked behind the robot, robot-relative driving), broadcast (behind the blue wall, follows the robot, eases the zoom in/out when crossing the alliance line, field-relative), and driver station 1-3 (eye height behind the wall, field-relative). Added keyboard, gamepad, and on-screen touch controls, a HUD, and a fixed-timestep loop that interpolates rendering. Split the bundle into app/three/physics chunks so physics loads in parallel; the physics chunk stays ~4.4 MB because Rapier's -compat build embeds its WASM. 47 tests pass (42 engine + 5 renderer). Could not screenshot in the sandbox (no display, servers and file:// blocked), so visuals are unverified by me; please check `npm run dev`. Next: Milestone 4, the bot creator, or Milestone 5, REEFSCAPE.

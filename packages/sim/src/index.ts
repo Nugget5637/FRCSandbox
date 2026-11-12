@@ -21,8 +21,11 @@ export {
   type Carpet,
   type Surface,
   type GamePack,
+  type Goal,
+  type ObstacleShape,
   type PieceShape,
   type ScoringRule,
+  type Zone,
 } from './pack';
 export {
   IDLE_INPUT,
@@ -48,6 +51,7 @@ export {
   combineSurfaces,
   createSimulation,
   initPhysics,
+  type GoalSnapshot,
   type PieceSnapshot,
   type PieceState,
   type RobotEntry,

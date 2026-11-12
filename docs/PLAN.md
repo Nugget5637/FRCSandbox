@@ -154,6 +154,8 @@ Build packs by hand (2 and 5) before building tools that automate pack creation 
 | 2026-11-11 | Robot colliders have zero friction and rounded edges               | Velocity-driven boxes otherwise stick on ramps                                  |
 | 2026-11-11 | Inactive goals still take pieces but award 0 points                | Matches REBUILT; pieces keep recycling either way                               |
 | 2026-11-11 | Surfaces combine by geometric mean; carpet adds rolling resistance | Any piece works on any field from its own values; Rapier lacks rolling friction |
+| 2026-11-11 | Three driver cameras; each sets its natural control frame          | Chase is robot-relative; broadcast and driver station are field-relative        |
+| 2026-11-11 | Bundle split into app/three/physics chunks                         | Rapier's WASM is embedded (~4.4 MB); parallel loading beats one blocking file   |
 | Open       | License                                                            | Owner to choose before publishing                                               |
 
 ## 10. Legal notes
