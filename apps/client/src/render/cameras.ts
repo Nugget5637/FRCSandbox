@@ -148,20 +148,23 @@ export class DriverCameras {
         this.zoomFrom + (goal - this.zoomFrom) * easeOut(this.zoomElapsed / ZOOM_SECONDS);
     }
 
-    // Fixed point high above field center. The position never moves; the camera
-    // only rotates (via lookAt) to track the robot, so the whole field stays in
-    // view and the robot is always framed. Zoom eases the height between two
-    // values when the robot crosses the alliance line.
-    const [length, width] = pack.field.size;
-    const height = lerp(13, 9, this.zoomLevel);
-    this.camera.position.set(length / 2, width / 2, height);
+    // A fixed vantage point behind and above the blue alliance wall (-x end),
+    // centered across the field width, angled down toward the red end. The
+    // position never moves; the camera pans both up/down and left/right (via
+    // lookAt tracking the robot) so the robot stays in frame wherever it drives.
+    // Zoom eases the pull-back and height when the robot crosses the line.
+    const [, width] = pack.field.size;
+    const back = lerp(6, 3, this.zoomLevel); // distance behind the wall
+    const height = lerp(9, 6.5, this.zoomLevel);
+    this.camera.position.set(-back, width / 2, height);
     this.camera.up.set(0, 0, 1);
 
     const look = new THREE.Vector3(robotPos.x, robotPos.y, robotPos.z);
     if (!this.initialized) {
       this.broadcastTarget.copy(look);
     } else {
-      damp(this.broadcastTarget, look, 8, dt);
+      // Smoothly pan to follow the robot in both axes.
+      damp(this.broadcastTarget, look, 6, dt);
     }
     this.camera.lookAt(this.broadcastTarget);
   }
