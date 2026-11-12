@@ -46,6 +46,7 @@ export {
 } from './demo/demo';
 export { getMechanic, knownMechanicIds, type MechanicModule } from './mechanics';
 export {
+  DEFAULT_ANGULAR_ACCELERATION,
   GRAVITY,
   Simulation,
   combineSurfaces,

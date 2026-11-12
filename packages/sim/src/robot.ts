@@ -14,6 +14,12 @@ export const RobotSpecSchema = z.object({
   maxSpeed: positive,
   maxAcceleration: positive,
   maxTurnRate: positive,
+  /**
+   * How quickly the turn rate ramps up and down (rad/s^2). Like
+   * maxAcceleration but for rotation, so turning eases in and out instead of
+   * snapping. Omit for a sensible default (DEFAULT_ANGULAR_ACCELERATION).
+   */
+  maxAngularAcceleration: positive.optional(),
   intake: z.object({
     /** How far in front of the frame the intake captures pieces. */
     reach: positive,

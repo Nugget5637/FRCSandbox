@@ -43,6 +43,9 @@ const robot: RobotEntry = {
     maxAcceleration: 22,
     // Turning is slower: 2*pi rad/s is a full 360 degrees in about one second.
     maxTurnRate: 2 * Math.PI,
+    // Turning eases in and out like translation, reaching full turn rate in
+    // about a third of a second rather than snapping.
+    maxAngularAcceleration: 6 * Math.PI,
     intake: { reach: 0.25, width: 0.6, capacity: 40 },
     release: { height: 0.5, speed: 6.4, pitch: (70 * Math.PI) / 180 },
   },

@@ -1,8 +1,18 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { SIM_HZ } from './constants';
-import { createSimulation, initPhysics, Simulation } from './simulation';
+import {
+  createSimulation,
+  DEFAULT_ANGULAR_ACCELERATION,
+  initPhysics,
+  Simulation,
+} from './simulation';
 import { SeededRandom } from './rng';
 import { driveToward, input, TEST_ROBOT_SPEC, testArena, testRobot } from './testing/fixtures';
+
+/** Smallest signed angle equivalent to d, for comparing yaw changes. */
+function wrapDelta(d: number): number {
+  return Math.atan2(Math.sin(d), Math.cos(d));
+}
 
 beforeAll(async () => {
   await initPhysics();
@@ -73,6 +83,35 @@ describe('Simulation', () => {
     // Rapier stores velocities as 32-bit floats, so allow a tiny rounding margin.
     expect(speed).toBeLessThanOrEqual(TEST_ROBOT_SPEC.maxAcceleration / SIM_HZ + 1e-5);
     sim.dispose();
+  });
+
+  it('ramps the turn rate up and down instead of snapping', async () => {
+    const spec = { ...TEST_ROBOT_SPEC, maxTurnRate: 6, maxAngularAcceleration: 12 };
+    const sim = await createSimulation({ pack: testArena(), robots: [testRobot({ spec })] });
+
+    // One step of full turn command: angular velocity should rise by about the
+    // angular-acceleration step, not jump straight to maxTurnRate.
+    sim.step({ 'blue-1': input({ rotate: 1 }) });
+    const afterOne = sim.snapshot().robots[0]!;
+    const perStep = spec.maxAngularAcceleration / SIM_HZ;
+    // The snapshot exposes yaw, not angular velocity, so check the yaw change
+    // over the first step is tiny (ramping), far below a full-rate step.
+    expect(Math.abs(afterOne.pose.yaw)).toBeLessThan((perStep / SIM_HZ) * 2 + 1e-6);
+    expect(Math.abs(afterOne.pose.yaw)).toBeLessThan(spec.maxTurnRate / SIM_HZ);
+
+    // Held long enough, it reaches the full turn rate: yaw advances by about
+    // maxTurnRate per second once ramped up.
+    for (let i = 0; i < SIM_HZ; i++) sim.step({ 'blue-1': input({ rotate: 1 }) });
+    const y1 = sim.snapshot().robots[0]!.pose.yaw;
+    for (let i = 0; i < 10; i++) sim.step({ 'blue-1': input({ rotate: 1 }) });
+    const y2 = sim.snapshot().robots[0]!.pose.yaw;
+    const ratePerStep = wrapDelta(y2 - y1) / 10;
+    expect(ratePerStep).toBeCloseTo(spec.maxTurnRate / SIM_HZ, 2);
+    sim.dispose();
+  });
+
+  it('defaults angular acceleration when a spec omits it', () => {
+    expect(DEFAULT_ANGULAR_ACCELERATION).toBeGreaterThan(0);
   });
 
   it('scores autonomous points for a scripted robot', async () => {

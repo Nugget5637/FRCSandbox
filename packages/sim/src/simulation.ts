@@ -29,6 +29,13 @@ const ROBOT_EDGE_RADIUS = 0.03;
 const RIDGE_SINK = 0.03;
 
 /**
+ * Default angular acceleration (rad/s^2) when a robot spec omits it. At the
+ * client's turn rate of 2*pi rad/s, this reaches full turn speed in about a
+ * quarter second, matching the snappy translation ramp.
+ */
+export const DEFAULT_ANGULAR_ACCELERATION = 8 * Math.PI;
+
+/**
  * Robots are driven by setting velocity, not by wheel friction, so they have zero
  * friction against everything. That lets box-shaped bodies slide up ramps. Low
  * restitution stands in for foam bumpers.
@@ -554,7 +561,15 @@ export class Simulation {
       { x: current.x + changeX * scale, y: current.y + changeY * scale, z: current.z },
       true,
     );
-    robot.body.setAngvel({ x: 0, y: 0, z: clamp(input.rotate, -1, 1) * maxTurnRate }, true);
+
+    // Rotation ramps toward its target the same way translation does, limited
+    // by angular acceleration, so turning eases in and out instead of snapping.
+    const targetOmega = clamp(input.rotate, -1, 1) * maxTurnRate;
+    const currentOmega = robot.body.angvel().z;
+    const maxOmegaChange =
+      (robot.entry.spec.maxAngularAcceleration ?? DEFAULT_ANGULAR_ACCELERATION) * SIM_STEP_SECONDS;
+    const omegaChange = clamp(targetOmega - currentOmega, -maxOmegaChange, maxOmegaChange);
+    robot.body.setAngvel({ x: 0, y: 0, z: currentOmega + omegaChange }, true);
   }
 
   private tryIntake(robot: RobotRecord): void {
