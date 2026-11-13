@@ -27,6 +27,28 @@ const HUB_OPENING = 41.7 * IN; // hexagonal opening, modeled as a square
 const HUB_RIM_Z = 72 * IN; // front edge of the opening above the carpet
 const HUB_INNER_Z = 56.5 * IN; // bottom of the catcher (6328 FieldConstants innerHeight)
 const RIM_THICKNESS = (HUB_SIZE - HUB_OPENING) / 2;
+// Funnel panels (the angled top panels inside the opening). The manual text gives
+// no panel geometry, so these are scaled from the Hub drawing GE-26300 sheet 4
+// (2026 Field Dimension Drawings). That drawing says "do not scale", so treat
+// both values as ASSUMPTIONS to replace once the CAD pipeline reads the model.
+const FUNNEL_BOTTOM_HALF = 15.25 * IN; // ASSUMPTION: half-width of the funnel throat at the catcher
+const PANEL_THICKNESS = 0.5 * IN; // ASSUMPTION
+// Net behind the hub (Manual 5.4: blocks FUEL launched from most prohibited areas).
+// Positions from the Hub drawing GE-26300 sheet 4 (dimensions printed on the drawing):
+const NET_OVERHANG = 10.26 * IN; // net plane behind the hub's neutral-zone face
+const NET_TOP = 120.36 * IN; // top of the net frame above the carpet
+const NET_WIDTH = 58.41 * IN; // net frame width across the field
+const NET_BOTTOM = HUB_RIM_Z; // ASSUMPTION: scaled from the drawing, level with the rim
+
+// --- Outpost (Manual 5.9.2; 6328 FieldConstants) ---
+const OUTPOST_Y = 0.666; // WPILib layout tag 29 y (6328 Outpost.centerPoint)
+const OUTPOST_OPENING_WIDTH = 31.8 * IN;
+const OUTPOST_OPENING_BOTTOM = 28.1 * IN;
+const OUTPOST_OPENING_HEIGHT = 7.0 * IN;
+const CHUTE_SLOPE = (15 * Math.PI) / 180; // Manual: 15 degree CHUTE
+const CHUTE_EXIT_SPEED = 1.5; // ASSUMPTION: fuel rolling out of the chute, m/s
+const OUTPOST_SUPPLY = 24; // Manual 6.3.4: 24 FUEL in each OUTPOST CHUTE
+const OUTPOST_FEED_SECONDS = 0.25; // ASSUMPTION: chute door releases about 4 fuel per second
 
 // --- Bumps (Manual 5.5): beside the hub, ramps slope toward both zones ---
 const BUMP_WIDTH = 73 * IN; // along y
@@ -65,14 +87,15 @@ const NEUTRAL_FUEL_DEPTH = 72 * IN; // along x
 const box = (center, size) => ({ center: center.map(r), size: size.map(r) });
 const mirrorPoint = ([x, y, z]) => [L - x, W - y, z];
 const mirrorBox = (b) => ({ center: mirrorPoint(b.center).map(r), size: b.size });
+const mirrorRotation = ([roll, pitch, yaw]) => [roll, pitch, r(yaw + Math.PI)];
 
 const obstacles = [];
 const addBoth = (id, shape) => {
   obstacles.push({ id: `blue-${id}`, shape: { ...shape, ...box(shape.center, shape.size) } });
-  obstacles.push({
-    id: `red-${id}`,
-    shape: { ...shape, ...mirrorBox(box(shape.center, shape.size)) },
-  });
+  // Red is blue rotated 180 degrees about the field center, so rotations gain pi of yaw.
+  const red = { ...shape, ...mirrorBox(box(shape.center, shape.size)) };
+  if (shape.rotation) red.rotation = mirrorRotation(shape.rotation);
+  obstacles.push({ id: `red-${id}`, shape: red });
 };
 const solid = (center, size) => ({ kind: 'box', center, size });
 
@@ -97,6 +120,35 @@ addBoth(
   'hub-rim-right',
   solid([HUB_X, HUB_Y - rimOffset, rimZ], [HUB_OPENING, RIM_THICKNESS, rimHeight]),
 );
+
+// Funnel: four angled panels from the inner edge of the rim down to the throat.
+const panelRun = HUB_OPENING / 2 - FUNNEL_BOTTOM_HALF;
+const panelDrop = HUB_RIM_Z - HUB_INNER_Z;
+const panelTilt = Math.atan2(panelRun, panelDrop); // from vertical
+const panelLength = Math.hypot(panelRun, panelDrop);
+const panelOffset = (HUB_OPENING / 2 + FUNNEL_BOTTOM_HALF) / 2;
+const panelZ = (HUB_RIM_Z + HUB_INNER_Z) / 2;
+const panel = (center, size, rotation) => ({
+  kind: 'box',
+  center,
+  size,
+  rotation: rotation.map(r),
+});
+for (const [name, dx, dy, rotation] of [
+  ['near', -1, 0, [0, -panelTilt, 0]],
+  ['far', 1, 0, [0, panelTilt, 0]],
+  ['left', 0, 1, [-panelTilt, 0, 0]],
+  ['right', 0, -1, [panelTilt, 0, 0]],
+]) {
+  const size =
+    dx !== 0
+      ? [PANEL_THICKNESS, HUB_OPENING, panelLength]
+      : [HUB_OPENING, PANEL_THICKNESS, panelLength];
+  addBoth(
+    `hub-panel-${name}`,
+    panel([HUB_X + dx * panelOffset, HUB_Y + dy * panelOffset, panelZ], size, rotation),
+  );
+}
 
 // Bumps: one on each side of the hub.
 const bumpOffset = HUB_SIZE / 2 + BUMP_WIDTH / 2;
@@ -154,8 +206,31 @@ for (const [name, z] of Object.entries(RUNG_HEIGHTS)) {
   );
 }
 
-// Goals: the volume inside the hub opening, between the catcher and the rim.
-const goalBox = box([HUB_X, HUB_Y, rimZ], [HUB_OPENING - 0.06, HUB_OPENING - 0.06, rimHeight]);
+// Net: one-sided, so it stops fuel coming from the neutral zone but lets fuel
+// from the alliance side through. Red's is the 180-degree rotation of blue's.
+const netShape = solid(
+  [HUB_X + HUB_SIZE / 2 + NET_OVERHANG, HUB_Y, (NET_BOTTOM + NET_TOP) / 2],
+  [0.02, NET_WIDTH, NET_TOP - NET_BOTTOM],
+);
+obstacles.push({
+  id: 'blue-hub-net',
+  shape: { ...netShape, ...box(netShape.center, netShape.size) },
+  surface: { friction: 0.6, restitution: 0.1 }, // ASSUMPTION: slack net absorbs most energy
+  oneSided: { normal: [1, 0, 0] },
+});
+obstacles.push({
+  id: 'red-hub-net',
+  shape: { ...netShape, ...mirrorBox(box(netShape.center, netShape.size)) },
+  surface: { friction: 0.6, restitution: 0.1 },
+  oneSided: { normal: [-1, 0, 0] },
+});
+
+// Goals: the funnel throat above the catcher. Fuel that lands on a panel slides
+// down into it; fuel resting on the catcher (center 1 radius up) is inside it.
+const goalBox = box(
+  [HUB_X, HUB_Y, HUB_INNER_Z + 3 * IN],
+  [2 * FUNNEL_BOTTOM_HALF, 2 * FUNNEL_BOTTOM_HALF, 6 * IN],
+);
 // Recycling: fuel leaves through exits at the hub base facing the neutral zone (Manual 5.4).
 const blueExit = {
   box: box([HUB_X + HUB_SIZE / 2 + 0.1, HUB_Y, FUEL_RADIUS + 0.02], [0.05, HUB_SIZE * 0.8, 0.02]),
@@ -230,6 +305,41 @@ const periodPoints = {
   endgame: 1,
 };
 
+// Human players (Manual 5.9.2, 6.3.4): each OUTPOST holds 24 fuel and feeds it
+// onto the field through the opening above the CHUTE.
+const outpostExit = {
+  box: box(
+    [FUEL_RADIUS + 0.05, OUTPOST_Y, OUTPOST_OPENING_BOTTOM + OUTPOST_OPENING_HEIGHT / 2],
+    [0.02, OUTPOST_OPENING_WIDTH - 2 * FUEL_RADIUS, 0.02],
+  ),
+  velocity: [
+    CHUTE_EXIT_SPEED * Math.cos(CHUTE_SLOPE),
+    0,
+    -CHUTE_EXIT_SPEED * Math.sin(CHUTE_SLOPE),
+  ].map(r),
+};
+const humanPlayerStations = [
+  {
+    id: 'blue-outpost',
+    alliance: 'blue',
+    pieceType: 'fuel',
+    supply: OUTPOST_SUPPLY,
+    feedSeconds: OUTPOST_FEED_SECONDS,
+    exit: outpostExit,
+  },
+  {
+    id: 'red-outpost',
+    alliance: 'red',
+    pieceType: 'fuel',
+    supply: OUTPOST_SUPPLY,
+    feedSeconds: OUTPOST_FEED_SECONDS,
+    exit: {
+      box: mirrorBox(outpostExit.box),
+      velocity: [-outpostExit.velocity[0], 0, outpostExit.velocity[2]],
+    },
+  },
+];
+
 const pack = {
   formatVersion: 1,
   id: 'rebuilt-2026',
@@ -247,6 +357,9 @@ const pack = {
     obstacles,
     goals,
     zones,
+    // Manual 6.8: FIELD STAFF put fuel that leaves the field back "approximately at
+    // the point of exit" at the earliest safe opportunity. The delay is an ASSUMPTION.
+    outOfBounds: { mode: 'exitPoint', delaySeconds: 3 },
   },
   pieceTypes: [
     {
@@ -262,6 +375,7 @@ const pack = {
   ],
   pieceSpawnAreas,
   preload: { type: 'fuel', maxPerRobot: 8 },
+  humanPlayerStations,
   match: {
     periods: [
       { id: 'auto', durationSeconds: 20 },
@@ -302,5 +416,6 @@ const here = dirname(fileURLToPath(import.meta.url));
 writeFileSync(join(here, 'pack.json'), JSON.stringify(pack, null, 2) + '\n');
 console.log(
   `wrote pack.json: ${obstacles.length} obstacles, ${goals.length} goals, ` +
-    `${pieceSpawnAreas.reduce((n, a) => n + a.count, 0)} fuel staged on the field`,
+    `${pieceSpawnAreas.reduce((n, a) => n + a.count, 0)} fuel staged on the field, ` +
+    `${humanPlayerStations.reduce((n, s) => n + s.supply, 0)} with human players`,
 );

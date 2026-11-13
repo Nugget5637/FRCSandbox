@@ -1,10 +1,13 @@
 import * as THREE from 'three';
-import type {
-  GamePack,
-  ObstacleShape,
-  PieceSnapshot,
-  RobotSnapshot,
-  SimSnapshot,
+import {
+  rotationToQuaternion,
+  type GamePack,
+  type ObstacleShape,
+  type PieceShape,
+  type PieceSnapshot,
+  type Rotation,
+  type RobotSnapshot,
+  type SimSnapshot,
 } from '@frcsandbox/sim';
 
 /**
@@ -14,17 +17,18 @@ import type {
  */
 
 const ALLIANCE_COLOR: Record<string, number> = { red: 0xdc2626, blue: 0x2563eb };
-const PIECE_COLOR = 0xfacc15;
+/** Colors for piece types in pack order (REBUILT fuel is the first, yellow). */
+const PIECE_COLORS = [0xfacc15, 0x14b8a6, 0xf5f5f4, 0xa855f7];
 const STRUCTURE_COLOR = 0x9ca3af;
 const RAMP_COLOR = 0xb45309;
 const CARPET_COLOR = 0x20242c;
 
 export class FieldRenderer {
   readonly scene = new THREE.Scene();
-  private readonly pieceMesh: THREE.InstancedMesh;
+  /** One instanced mesh per piece type, keyed by type id. */
+  private readonly pieceMeshes = new Map<string, THREE.InstancedMesh>();
   private readonly robotMeshes = new Map<string, THREE.Group>();
   private readonly dummy = new THREE.Object3D();
-  private readonly pieceRadius: number;
   private readonly maxPieces: number;
 
   constructor(private readonly pack: GamePack) {
@@ -34,24 +38,27 @@ export class FieldRenderer {
     this.addObstacles();
     this.addGoals();
 
-    const piece = pack.pieceTypes[0]!;
-    this.pieceRadius = piece.shape.kind === 'sphere' ? piece.shape.radius : piece.shape.size[0] / 2;
     this.maxPieces = this.countPieces();
-    this.pieceMesh = new THREE.InstancedMesh(
-      new THREE.SphereGeometry(this.pieceRadius, 10, 8),
-      new THREE.MeshLambertMaterial({ color: PIECE_COLOR }),
-      Math.max(1, this.maxPieces),
-    );
-    this.pieceMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    this.pieceMesh.frustumCulled = false;
-    this.scene.add(this.pieceMesh);
+    pack.pieceTypes.forEach((type, i) => {
+      const mesh = new THREE.InstancedMesh(
+        pieceGeometry(type.shape),
+        new THREE.MeshLambertMaterial({ color: PIECE_COLORS[i % PIECE_COLORS.length] ?? 0xffffff }),
+        Math.max(1, this.maxPieces),
+      );
+      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      mesh.frustumCulled = false;
+      mesh.count = 0;
+      this.pieceMeshes.set(type.id, mesh);
+      this.scene.add(mesh);
+    });
   }
 
   private countPieces(): number {
     const spawns = this.pack.pieceSpawns.length;
     const areas = this.pack.pieceSpawnAreas.reduce((n, a) => n + a.count, 0);
     const preload = (this.pack.preload?.maxPerRobot ?? 0) * 6;
-    return spawns + areas + preload;
+    const stations = this.pack.humanPlayerStations.reduce((n, s) => n + s.supply, 0);
+    return spawns + areas + preload + stations;
   }
 
   private addLights(): void {
@@ -86,6 +93,12 @@ export class FieldRenderer {
   private addObstacles(): void {
     for (const obstacle of this.pack.field.obstacles) {
       const mesh = this.obstacleMesh(obstacle.shape);
+      applyRotation(mesh, obstacle.shape.rotation);
+      if (obstacle.oneSided) {
+        // Nets and other one-sided blockers are drawn as see-through mesh.
+        (mesh.material as THREE.MeshLambertMaterial).opacity = 0.25;
+        (mesh.material as THREE.MeshLambertMaterial).transparent = true;
+      }
       this.scene.add(mesh);
     }
   }
@@ -132,6 +145,7 @@ export class FieldRenderer {
         }),
       );
       mesh.position.set(goal.box.center[0], goal.box.center[1], goal.box.center[2]);
+      applyRotation(mesh, goal.box.rotation);
       mesh.userData.goalId = goal.id;
       this.scene.add(mesh);
     }
@@ -164,17 +178,24 @@ export class FieldRenderer {
   }
 
   private updatePieces(pieces: PieceSnapshot[]): void {
-    let count = 0;
+    const counts = new Map<string, number>();
     for (const piece of pieces) {
-      if (piece.state !== 'field' || !piece.position || count >= this.maxPieces) continue;
+      const mesh = this.pieceMeshes.get(piece.type);
+      if (!mesh || piece.state !== 'field' || !piece.position) continue;
+      const count = counts.get(piece.type) ?? 0;
+      if (count >= this.maxPieces) continue;
       this.dummy.position.set(piece.position.x, piece.position.y, piece.position.z);
-      this.dummy.rotation.set(0, 0, 0);
+      const q = piece.rotation;
+      if (q) this.dummy.quaternion.set(q.x, q.y, q.z, q.w);
+      else this.dummy.quaternion.identity();
       this.dummy.updateMatrix();
-      this.pieceMesh.setMatrixAt(count, this.dummy.matrix);
-      count += 1;
+      mesh.setMatrixAt(count, this.dummy.matrix);
+      counts.set(piece.type, count + 1);
     }
-    this.pieceMesh.count = count;
-    this.pieceMesh.instanceMatrix.needsUpdate = true;
+    for (const [type, mesh] of this.pieceMeshes) {
+      mesh.count = counts.get(type) ?? 0;
+      mesh.instanceMatrix.needsUpdate = true;
+    }
   }
 
   private updateRobots(robots: RobotSnapshot[]): void {
@@ -201,7 +222,31 @@ export class FieldRenderer {
   }
 
   dispose(): void {
-    this.pieceMesh.geometry.dispose();
-    (this.pieceMesh.material as THREE.Material).dispose();
+    for (const mesh of this.pieceMeshes.values()) {
+      mesh.geometry.dispose();
+      (mesh.material as THREE.Material).dispose();
+    }
   }
+}
+
+/** Low-poly geometry for a piece shape, in the piece's own frame (cylinders along z). */
+function pieceGeometry(shape: PieceShape): THREE.BufferGeometry {
+  switch (shape.kind) {
+    case 'sphere':
+      return new THREE.SphereGeometry(shape.radius, 10, 8);
+    case 'box':
+      return new THREE.BoxGeometry(...shape.size);
+    case 'cylinder':
+      // Three.js cylinders run along y; turn them to run along z like the engine's.
+      return new THREE.CylinderGeometry(shape.radius, shape.radius, shape.length, 12).rotateX(
+        Math.PI / 2,
+      );
+  }
+}
+
+/** Applies a pack rotation (WPILib Rotation3d convention) to a mesh. */
+function applyRotation(mesh: THREE.Object3D, rotation: Rotation | undefined): void {
+  if (!rotation) return;
+  const q = rotationToQuaternion(rotation);
+  mesh.quaternion.set(q.x, q.y, q.z, q.w);
 }

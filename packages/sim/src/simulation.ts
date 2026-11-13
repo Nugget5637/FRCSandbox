@@ -5,14 +5,19 @@ import { getMechanic, type MechanicContext, type MechanicInstance } from './mech
 import {
   boxContains,
   pointsFor,
+  rotationToQuaternion,
   type Alliance,
   type Box,
   type GamePack,
   type Goal,
-  type ObstacleShape,
+  type HumanPlayerStation,
+  type Obstacle,
+  type PieceExit,
   type PieceShape,
+  type Quaternion,
   type Surface,
   DEFAULT_STRUCTURE_SURFACE,
+  IDENTITY_QUATERNION,
 } from './pack';
 import { checkRobotRules, IDLE_INPUT, type RobotInput, type RobotSpec } from './robot';
 import { SeededRandom } from './rng';
@@ -46,6 +51,18 @@ const ROBOT_SURFACE: Surface = { friction: 0, restitution: 0.2 };
 const CARPET_CONTACT_TOLERANCE = 0.01;
 /** Below this speed a rolling piece is stopped outright so it can sleep. */
 const ROLLING_STOP_SPEED = 0.03;
+
+/** A piece whose center falls this far below the carpet has left the field. */
+const OUT_OF_BOUNDS_FLOOR = -0.5;
+/** Extra clearance beyond a piece's radius when it is put back inside the field. */
+const RETURN_CLEARANCE = 0.05;
+/** One-sided obstacles only check bodies within this distance of their bounding sphere. */
+const ONE_SIDED_MARGIN = 1;
+
+/** Rapier cylinders run along their local y axis; pack cylinders run along z. */
+const CYLINDER_TO_Z: Quaternion = { x: Math.SQRT1_2, y: 0, z: 0, w: Math.SQRT1_2 };
+/** A returned cylinder lies on its side with its axis along field x. */
+const LYING_CYLINDER = rotationToQuaternion([0, Math.PI / 2, 0]);
 
 /**
  * Applies a surface so every contact uses the geometric mean of both sides.
@@ -86,6 +103,12 @@ export interface RobotEntry {
   preload?: number;
 }
 
+/** One tick of input for a human player station. */
+export interface HumanPlayerInput {
+  /** While true, the human player feeds one piece every `feedSeconds`. */
+  feed: boolean;
+}
+
 export interface SimulationOptions {
   pack: GamePack;
   robots: RobotEntry[];
@@ -95,14 +118,19 @@ export interface SimulationOptions {
 /**
  * field: loose on the field. stored: held by a robot. processing: inside a
  * recycling goal, about to return to the field. scored: removed from play.
+ * station: held by a human player. outOfBounds: left the field and waiting for
+ * a referee to put it back.
  */
-export type PieceState = 'field' | 'stored' | 'processing' | 'scored';
+export type PieceState = 'field' | 'stored' | 'processing' | 'scored' | 'station' | 'outOfBounds';
 
 export type SimEvent =
   | { tick: number; type: 'periodStarted'; period: string }
   | { tick: number; type: 'matchEnded' }
   | { tick: number; type: 'pieceAcquired'; pieceId: number; robotId: string }
   | { tick: number; type: 'pieceReleased'; pieceId: number; robotId: string }
+  | { tick: number; type: 'pieceFed'; pieceId: number; station: string }
+  | { tick: number; type: 'pieceLeftField'; pieceId: number }
+  | { tick: number; type: 'pieceReturned'; pieceId: number }
   | {
       tick: number;
       type: 'pieceScored';
@@ -128,7 +156,18 @@ export interface PieceSnapshot {
   type: string;
   state: PieceState;
   position: { x: number; y: number; z: number } | null;
+  /** Orientation while on the field. */
+  rotation: Quaternion | null;
   heldBy: string | null;
+}
+
+export interface StationSnapshot {
+  id: string;
+  alliance: Alliance;
+  /** Pieces the human player still holds. */
+  supply: number;
+  /** True while a feed is in progress. */
+  feeding: boolean;
 }
 
 export interface GoalSnapshot {
@@ -146,6 +185,7 @@ export interface SimSnapshot {
   robots: RobotSnapshot[];
   pieces: PieceSnapshot[];
   goals: GoalSnapshot[];
+  stations: StationSnapshot[];
 }
 
 interface PieceRecord {
@@ -160,9 +200,26 @@ interface PieceRecord {
   /** The robot that last released this piece cannot recapture it until this tick. */
   recaptureBlockedFor: string | null;
   recaptureBlockedUntil: number;
-  /** For processing pieces: when and where they return to the field. */
+  /** For processing and out-of-bounds pieces: when and where they return to the field. */
   returnTick: number;
   returnGoal: Goal | null;
+  returnPosition: [number, number, number] | null;
+}
+
+interface StationRecord {
+  station: HumanPlayerStation;
+  /** Ids of pieces the human player holds, fed in order. */
+  supply: number[];
+  /** Tick when the current feed finishes, or null if idle. */
+  feedDoneTick: number | null;
+}
+
+interface OneSidedRecord {
+  normal: [number, number, number];
+  center: [number, number, number];
+  reach: number;
+  /** Bodies behind the obstacle this step; they pass through it. */
+  passing: Set<number>;
 }
 
 interface RobotRecord {
@@ -193,6 +250,14 @@ export class Simulation {
   private readonly mechanics: MechanicInstance[];
   private readonly events: SimEvent[] = [];
   private readonly score: Record<Alliance, number> = { red: 0, blue: 0 };
+  private readonly stations: StationRecord[] = [];
+  /** One-sided obstacles keyed by collider handle. */
+  private readonly oneSided = new Map<number, OneSidedRecord>();
+  private readonly hooks: RAPIER.PhysicsHooks;
+  /** Rapier ignores physics hooks unless an event queue is passed with them. */
+  private readonly eventQueue: RAPIER.EventQueue;
+  /** Pieces scored so far in each goal, for goal capacity. */
+  private readonly goalCounts = new Map<string, number>();
   private tickCount = 0;
   private periodIndex = 0;
   private disposed = false;
@@ -244,11 +309,21 @@ export class Simulation {
 
     this.world = new RAPIER.World({ x: 0, y: 0, z: -GRAVITY });
     this.world.timestep = SIM_STEP_SECONDS;
+    this.hooks = {
+      filterContactPair: (c1, c2, b1, b2) => {
+        const a = this.oneSided.get(c1);
+        const b = this.oneSided.get(c2);
+        if ((a && a.passing.has(b2)) || (b && b.passing.has(b1))) return null;
+        return RAPIER.SolverFlags.COMPUTE_IMPULSE;
+      },
+      filterIntersectionPair: () => true,
+    };
+    this.eventQueue = new RAPIER.EventQueue(true);
 
     this.buildField();
     for (const spawn of pack.pieceSpawns) {
       const [x, y, z] = spawn.position;
-      this.addPiece(spawn.type, x, y, z);
+      this.addPiece(spawn.type, x, y, z, true, rotationToQuaternion(spawn.rotation));
     }
     for (const area of pack.pieceSpawnAreas) {
       for (const [x, y, z] of this.gridPositions(area.type, area.box, area.count, area.jitter)) {
@@ -265,6 +340,16 @@ export class Simulation {
         robot.stored.push(piece.id);
       }
       this.robots.push(robot);
+    }
+
+    for (const station of pack.humanPlayerStations) {
+      const record: StationRecord = { station, supply: [], feedDoneTick: null };
+      for (let i = 0; i < station.supply; i++) {
+        const piece = this.addPiece(station.pieceType, 0, 0, 0, false);
+        piece.state = 'station';
+        record.supply.push(piece.id);
+      }
+      this.stations.push(record);
     }
 
     const first = this.periods[0];
@@ -288,8 +373,15 @@ export class Simulation {
     return this.events;
   }
 
-  /** Advances the simulation by one fixed step. Robots without input receive IDLE_INPUT. */
-  step(inputs: Readonly<Record<string, RobotInput>> = {}): void {
+  /**
+   * Advances the simulation by one fixed step. Robots without input receive
+   * IDLE_INPUT. `humanPlayers` is keyed by human player station id; stations
+   * without input stay idle.
+   */
+  step(
+    inputs: Readonly<Record<string, RobotInput>> = {},
+    humanPlayers: Readonly<Record<string, HumanPlayerInput>> = {},
+  ): void {
     if (this.disposed) throw new Error('simulation has been disposed');
     if (this.finished) return;
 
@@ -300,11 +392,19 @@ export class Simulation {
       if (input.release && !robot.releaseWasPressed) this.release(robot);
       robot.releaseWasPressed = input.release;
     }
+    this.updateStations(humanPlayers);
 
-    this.world.step();
+    if (this.oneSided.size > 0) {
+      this.updateOneSided();
+      this.world.step(this.eventQueue, this.hooks);
+    } else {
+      this.world.step();
+    }
     this.applyRollingResistance();
     this.tickCount += 1;
     this.returnProcessedPieces();
+    this.checkOutOfBounds();
+    this.returnOutOfBoundsPieces();
     this.checkScoring();
     this.advancePeriod();
   }
@@ -330,11 +430,13 @@ export class Simulation {
       }),
       pieces: this.pieces.map((p) => {
         const t = p.body?.translation();
+        const q = p.body?.rotation();
         return {
           id: p.id,
           type: p.type,
           state: p.state,
           position: t ? { x: t.x, y: t.y, z: t.z } : null,
+          rotation: q ? { x: q.x, y: q.y, z: q.z, w: q.w } : null,
           heldBy: p.heldBy,
         };
       }),
@@ -343,6 +445,12 @@ export class Simulation {
         alliance: g.creditAlliance,
         active: context ? this.isGoalActive(g, context) : false,
       })),
+      stations: this.stations.map((s) => ({
+        id: s.station.id,
+        alliance: s.station.alliance,
+        supply: s.supply.length,
+        feeding: s.feedDoneTick !== null,
+      })),
     };
   }
 
@@ -350,6 +458,7 @@ export class Simulation {
   dispose(): void {
     if (this.disposed) return;
     this.world.free();
+    this.eventQueue.free();
     this.disposed = true;
   }
 
@@ -396,38 +505,60 @@ export class Simulation {
     wall(length / 2, -t, length / 2, t);
     wall(length / 2, width + t, length / 2, t);
 
-    for (const obstacle of obstacles) {
-      this.addObstacle(obstacle.shape, obstacle.surface ?? DEFAULT_STRUCTURE_SURFACE);
-    }
+    for (const obstacle of obstacles) this.addObstacle(obstacle);
   }
 
-  private addObstacle(shape: ObstacleShape, surface: Surface): void {
+  private addObstacle(obstacle: Obstacle): void {
+    const { shape } = obstacle;
+    const surface = obstacle.surface ?? DEFAULT_STRUCTURE_SURFACE;
     const [cx, cy, cz] = shape.center;
     const [sx, sy, sz] = shape.size;
     const body = this.world.createRigidBody(
-      RAPIER.RigidBodyDesc.fixed().setTranslation(cx, cy, cz),
+      RAPIER.RigidBodyDesc.fixed()
+        .setTranslation(cx, cy, cz)
+        .setRotation(rotationToQuaternion(shape.rotation)),
     );
+    let desc: RAPIER.ColliderDesc;
     if (shape.kind === 'box') {
-      this.world.createCollider(
-        withSurface(RAPIER.ColliderDesc.cuboid(sx / 2, sy / 2, sz / 2), surface),
-        body,
-      );
-      return;
+      desc = RAPIER.ColliderDesc.cuboid(sx / 2, sy / 2, sz / 2);
+    } else {
+      desc = ridgeCollider(shape.ridgeAxis, sx, sy, sz);
     }
-    // Triangular prism: base fills the box footprint, peak runs along ridgeAxis at the top.
-    // The base is sunk slightly below the box so a robot sliding on the floor meets the
-    // sloped face instead of the zero-height toe edge, which would stop it dead.
-    const hx = sx / 2;
-    const hy = sy / 2;
-    const hz = sz / 2;
-    const base = -hz - RIDGE_SINK;
-    const points =
-      shape.ridgeAxis === 'y'
-        ? [-hx, -hy, base, hx, -hy, base, 0, -hy, hz, -hx, hy, base, hx, hy, base, 0, hy, hz]
-        : [-hx, -hy, base, -hx, hy, base, -hx, 0, hz, hx, -hy, base, hx, hy, base, hx, 0, hz];
-    const hull = RAPIER.ColliderDesc.convexHull(new Float32Array(points));
-    if (!hull) throw new Error('could not build ridge obstacle');
-    this.world.createCollider(withSurface(hull, surface), body);
+    if (obstacle.oneSided) desc.setActiveHooks(RAPIER.ActiveHooks.FILTER_CONTACT_PAIRS);
+    const collider = this.world.createCollider(withSurface(desc, surface), body);
+    if (obstacle.oneSided) {
+      const [nx, ny, nz] = obstacle.oneSided.normal;
+      const length = Math.hypot(nx, ny, nz);
+      this.oneSided.set(collider.handle, {
+        normal: [nx / length, ny / length, nz / length],
+        center: [cx, cy, cz],
+        reach: Math.hypot(sx, sy, sz) / 2 + ONE_SIDED_MARGIN,
+        passing: new Set(),
+      });
+    }
+  }
+
+  /**
+   * Before each physics step, lists the bodies behind each one-sided obstacle.
+   * The contact filter lets those bodies pass through; bodies in front collide.
+   */
+  private updateOneSided(): void {
+    const bodies: RigidBody[] = this.robots.map((r) => r.body);
+    for (const piece of this.pieces) if (piece.body) bodies.push(piece.body);
+    for (const record of this.oneSided.values()) {
+      record.passing.clear();
+      const [cx, cy, cz] = record.center;
+      const [nx, ny, nz] = record.normal;
+      for (const body of bodies) {
+        const p = body.translation();
+        const dx = p.x - cx;
+        const dy = p.y - cy;
+        const dz = p.z - cz;
+        if (Math.abs(dx) > record.reach || Math.abs(dy) > record.reach) continue;
+        if (Math.hypot(dx, dy, dz) > record.reach) continue;
+        if (dx * nx + dy * ny + dz * nz < 0) record.passing.add(body.handle);
+      }
+    }
   }
 
   /** Evenly spaced positions filling a box from the floor up, one layer at a time. */
@@ -463,7 +594,14 @@ export class Simulation {
     return positions;
   }
 
-  private addPiece(type: string, x: number, y: number, z: number, onField = true): PieceRecord {
+  private addPiece(
+    type: string,
+    x: number,
+    y: number,
+    z: number,
+    onField = true,
+    rotation: Quaternion = IDENTITY_QUATERNION,
+  ): PieceRecord {
     const pieceType = this.pack.pieceTypes.find((t) => t.id === type);
     if (!pieceType) throw new Error(`unknown piece type "${type}"`);
     const record: PieceRecord = {
@@ -472,12 +610,13 @@ export class Simulation {
       shape: pieceType.shape,
       rollingResistance: pieceType.rollingResistance,
       state: 'field',
-      body: onField ? this.createPieceBody(type, x, y, z, { x: 0, y: 0, z: 0 }) : null,
+      body: onField ? this.createPieceBody(type, x, y, z, { x: 0, y: 0, z: 0 }, rotation) : null,
       heldBy: null,
       recaptureBlockedFor: null,
       recaptureBlockedUntil: 0,
       returnTick: 0,
       returnGoal: null,
+      returnPosition: null,
     };
     this.pieces.push(record);
     return record;
@@ -489,23 +628,24 @@ export class Simulation {
     y: number,
     z: number,
     velocity: { x: number; y: number; z: number },
+    rotation: Quaternion = IDENTITY_QUATERNION,
   ): RigidBody {
     const type = this.pack.pieceTypes.find((t) => t.id === typeId);
     if (!type) throw new Error(`unknown piece type "${typeId}"`);
     const body = this.world.createRigidBody(
       RAPIER.RigidBodyDesc.dynamic()
         .setTranslation(x, y, z)
+        .setRotation(rotation)
         .setLinvel(velocity.x, velocity.y, velocity.z)
         .setCcdEnabled(true),
     );
+    const { shape } = type;
     const collider =
-      type.shape.kind === 'sphere'
-        ? RAPIER.ColliderDesc.ball(type.shape.radius)
-        : RAPIER.ColliderDesc.cuboid(
-            type.shape.size[0] / 2,
-            type.shape.size[1] / 2,
-            type.shape.size[2] / 2,
-          );
+      shape.kind === 'sphere'
+        ? RAPIER.ColliderDesc.ball(shape.radius)
+        : shape.kind === 'box'
+          ? RAPIER.ColliderDesc.cuboid(shape.size[0] / 2, shape.size[1] / 2, shape.size[2] / 2)
+          : RAPIER.ColliderDesc.cylinder(shape.length / 2, shape.radius).setRotation(CYLINDER_TO_Z);
     this.world.createCollider(withSurface(collider.setMass(type.mass), type), body);
     // New bodies can otherwise join a sleeping island and hang in midair.
     body.wakeUp();
@@ -631,6 +771,12 @@ export class Simulation {
     const offset = frame.length / 2 + radius + 0.02;
     const horizontal = release.speed * Math.cos(release.pitch);
     const floor = t.z - frame.height / 2;
+    // Cylinders leave with their axis along the launch direction, the way a
+    // coral slides off an end effector onto a branch.
+    const rotation =
+      piece.shape.kind === 'cylinder'
+        ? rotationToQuaternion([0, Math.PI / 2 - release.pitch, yaw])
+        : IDENTITY_QUATERNION;
 
     piece.body = this.createPieceBody(
       piece.type,
@@ -642,6 +788,7 @@ export class Simulation {
         y: v.y + Math.sin(yaw) * horizontal,
         z: release.speed * Math.sin(release.pitch),
       },
+      rotation,
     );
     piece.state = 'field';
     piece.heldBy = null;
@@ -662,13 +809,23 @@ export class Simulation {
     for (const piece of this.pieces) {
       if (piece.state !== 'field' || !piece.body) continue;
       const p = piece.body.translation();
-      const goal = this.pack.field.goals.find((g) => boxContains(g.box, p.x, p.y, p.z));
+      let goal: Goal | undefined;
+      let rules: GamePack['scoring'] = [];
+      for (const candidate of this.pack.field.goals) {
+        if (!boxContains(candidate.box, p.x, p.y, p.z)) continue;
+        if (candidate.capacity !== undefined) {
+          if ((this.goalCounts.get(candidate.id) ?? 0) >= candidate.capacity) continue;
+        }
+        rules = this.pack.scoring.filter(
+          (r) =>
+            r.goals.includes(candidate.id) && (!r.pieceTypes || r.pieceTypes.includes(piece.type)),
+        );
+        if (rules.length > 0) {
+          goal = candidate;
+          break;
+        }
+      }
       if (!goal) continue;
-
-      const rules = this.pack.scoring.filter(
-        (r) => r.goals.includes(goal.id) && (!r.pieceTypes || r.pieceTypes.includes(piece.type)),
-      );
-      if (rules.length === 0) continue;
 
       const active = this.isGoalActive(goal, context);
       this.world.removeRigidBody(piece.body);
@@ -679,6 +836,7 @@ export class Simulation {
         piece.returnTick = this.tickCount + Math.round(goal.recycle.delaySeconds * SIM_HZ);
       } else {
         piece.state = 'scored';
+        this.goalCounts.set(goal.id, (this.goalCounts.get(goal.id) ?? 0) + 1);
       }
 
       for (const rule of rules) {
@@ -715,8 +873,10 @@ export class Simulation {
   private applyRollingResistance(): void {
     const { carpet } = this.pack.field;
     for (const piece of this.pieces) {
-      if (piece.state !== 'field' || !piece.body || piece.shape.kind !== 'sphere') continue;
+      if (piece.state !== 'field' || !piece.body || piece.shape.kind === 'box') continue;
       if (piece.body.isSleeping()) continue;
+      // Spheres always roll; a cylinder rolls only while lying on its side,
+      // which is when its center is one radius above the carpet.
       const p = piece.body.translation();
       if (p.z > piece.shape.radius + CARPET_CONTACT_TOLERANCE) continue;
 
@@ -748,18 +908,129 @@ export class Simulation {
       if (piece.state !== 'processing' || this.tickCount < piece.returnTick) continue;
       const exit = piece.returnGoal?.recycle?.exit;
       if (!exit) continue;
-      const [cx, cy, cz] = exit.box.center;
-      const [sx, sy, sz] = exit.box.size;
-      const [vx, vy, vz] = exit.velocity;
-      piece.body = this.createPieceBody(
-        piece.type,
-        cx + this.random.range(-sx / 2, sx / 2),
-        cy + this.random.range(-sy / 2, sy / 2),
-        cz + this.random.range(-sz / 2, sz / 2),
-        { x: vx, y: vy, z: vz },
-      );
-      piece.state = 'field';
+      this.placeAtExit(piece, exit);
       piece.returnGoal = null;
+    }
+  }
+
+  /** Puts a piece onto the field at a random point in an exit, moving at the exit's velocity. */
+  private placeAtExit(piece: PieceRecord, exit: PieceExit): void {
+    const [cx, cy, cz] = exit.box.center;
+    const [sx, sy, sz] = exit.box.size;
+    const [vx, vy, vz] = exit.velocity;
+    piece.body = this.createPieceBody(
+      piece.type,
+      cx + this.random.range(-sx / 2, sx / 2),
+      cy + this.random.range(-sy / 2, sy / 2),
+      cz + this.random.range(-sz / 2, sz / 2),
+      { x: vx, y: vy, z: vz },
+      rotationToQuaternion(exit.rotation),
+    );
+    piece.state = 'field';
+    piece.heldBy = null;
+  }
+
+  /**
+   * Human player stations. While a station's feed input is held, the human
+   * player spends `feedSeconds` on each piece, then it appears at the exit.
+   * Letting go cancels the piece in progress.
+   */
+  private updateStations(inputs: Readonly<Record<string, HumanPlayerInput>>): void {
+    for (const record of this.stations) {
+      const feed = inputs[record.station.id]?.feed ?? false;
+      if (!feed || record.supply.length === 0) {
+        record.feedDoneTick = null;
+        continue;
+      }
+      const feedTicks = Math.max(1, Math.round(record.station.feedSeconds * SIM_HZ));
+      record.feedDoneTick ??= this.tickCount + feedTicks;
+      if (this.tickCount < record.feedDoneTick) continue;
+
+      const piece = this.pieces[record.supply.shift()!]!;
+      this.placeAtExit(piece, record.station.exit);
+      this.events.push({
+        tick: this.tickCount,
+        type: 'pieceFed',
+        pieceId: piece.id,
+        station: record.station.id,
+      });
+      // Still held: the next piece starts right away.
+      record.feedDoneTick = record.supply.length > 0 ? this.tickCount + feedTicks : null;
+    }
+  }
+
+  /**
+   * Out-of-bounds re-entry. A piece whose center leaves the field rectangle
+   * (over a wall) or drops through the floor is taken out of play, then put
+   * back on the carpet after a delay, the way a referee would.
+   */
+  private checkOutOfBounds(): void {
+    const [length, width] = this.pack.field.size;
+    const rule = this.pack.field.outOfBounds;
+    for (const piece of this.pieces) {
+      if (piece.state !== 'field' || !piece.body) continue;
+      const p = piece.body.translation();
+      const outside = p.x < 0 || p.x > length || p.y < 0 || p.y > width;
+      if (!outside && p.z >= OUT_OF_BOUNDS_FLOOR) continue;
+
+      const v = piece.body.linvel();
+      const rest = restHeight(piece.shape);
+      let target: [number, number];
+      if (rule.mode === 'exitPoint') {
+        target = [p.x, p.y];
+      } else {
+        // Where the piece would come down, from its height and velocity now.
+        const rise = p.z - rest;
+        const t =
+          rise > 0 || v.z > 0
+            ? (v.z + Math.sqrt(v.z * v.z + 2 * GRAVITY * Math.max(rise, 0))) / GRAVITY
+            : 0;
+        target = [p.x + v.x * t, p.y + v.y * t];
+      }
+
+      let position: [number, number, number];
+      const zone =
+        rule.mode === 'zone'
+          ? nearest(rule.zones, (z) =>
+              Math.hypot(z.box.center[0] - target[0], z.box.center[1] - target[1]),
+            )
+          : undefined;
+      if (zone) {
+        const [cx, cy, cz] = zone.box.center;
+        const [sx, sy, sz] = zone.box.size;
+        position = [
+          cx + this.random.range(-sx / 2, sx / 2),
+          cy + this.random.range(-sy / 2, sy / 2),
+          Math.max(cz - sz / 2, 0) + rest + 0.01,
+        ];
+      } else {
+        // Nearest point inside the field, far enough from the wall to fit the piece.
+        const inset = boundingRadius(piece.shape) + RETURN_CLEARANCE;
+        position = [
+          clamp(target[0], inset, length - inset),
+          clamp(target[1], inset, width - inset),
+          rest + 0.01,
+        ];
+      }
+
+      this.world.removeRigidBody(piece.body);
+      piece.body = null;
+      piece.state = 'outOfBounds';
+      piece.returnPosition = position;
+      piece.returnTick = this.tickCount + Math.round(rule.delaySeconds * SIM_HZ);
+      this.events.push({ tick: this.tickCount, type: 'pieceLeftField', pieceId: piece.id });
+    }
+  }
+
+  private returnOutOfBoundsPieces(): void {
+    for (const piece of this.pieces) {
+      if (piece.state !== 'outOfBounds' || this.tickCount < piece.returnTick) continue;
+      const [x, y, z] = piece.returnPosition!;
+      const rotation = piece.shape.kind === 'cylinder' ? LYING_CYLINDER : IDENTITY_QUATERNION;
+      piece.body = this.createPieceBody(piece.type, x, y, z, { x: 0, y: 0, z: 0 }, rotation);
+      piece.state = 'field';
+      piece.returnPosition = null;
+      this.events.push({ tick: this.tickCount, type: 'pieceReturned', pieceId: piece.id });
     }
   }
 
@@ -788,7 +1059,57 @@ function yawOf(body: RigidBody): number {
 }
 
 function boundingRadius(shape: PieceShape): number {
-  return shape.kind === 'sphere' ? shape.radius : Math.hypot(...shape.size) / 2;
+  switch (shape.kind) {
+    case 'sphere':
+      return shape.radius;
+    case 'box':
+      return Math.hypot(...shape.size) / 2;
+    case 'cylinder':
+      return Math.hypot(shape.radius * 2, shape.length) / 2;
+  }
+}
+
+/** Height of a piece's center when it rests on the carpet as the engine returns it. */
+function restHeight(shape: PieceShape): number {
+  switch (shape.kind) {
+    case 'sphere':
+      return shape.radius;
+    case 'box':
+      return shape.size[2] / 2;
+    case 'cylinder':
+      return shape.radius; // returned lying on its side
+  }
+}
+
+/** Triangular prism collider for a ridge obstacle, in the obstacle's own frame. */
+function ridgeCollider(axis: 'x' | 'y', sx: number, sy: number, sz: number): RAPIER.ColliderDesc {
+  // Base fills the box footprint, peak runs along the ridge axis at the top.
+  // The base is sunk slightly below the box so a robot sliding on the floor meets the
+  // sloped face instead of the zero-height toe edge, which would stop it dead.
+  const hx = sx / 2;
+  const hy = sy / 2;
+  const hz = sz / 2;
+  const base = -hz - RIDGE_SINK;
+  const points =
+    axis === 'y'
+      ? [-hx, -hy, base, hx, -hy, base, 0, -hy, hz, -hx, hy, base, hx, hy, base, 0, hy, hz]
+      : [-hx, -hy, base, -hx, hy, base, -hx, 0, hz, hx, -hy, base, hx, hy, base, hx, 0, hz];
+  const hull = RAPIER.ColliderDesc.convexHull(new Float32Array(points));
+  if (!hull) throw new Error('could not build ridge obstacle');
+  return hull;
+}
+
+function nearest<T>(items: readonly T[], distance: (item: T) => number): T | undefined {
+  let best: T | undefined;
+  let bestDistance = Infinity;
+  for (const item of items) {
+    const d = distance(item);
+    if (d < bestDistance) {
+      best = item;
+      bestDistance = d;
+    }
+  }
+  return best;
 }
 
 function clamp(value: number, min: number, max: number): number {

@@ -20,7 +20,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check": "npm run format:check && npm run typecheck && npm run test && npm run build",
-    "packs:rebuilt": "node game-packs/rebuilt-2026/generate.mjs"
+    "packs:rebuilt": "node game-packs/rebuilt-2026/generate.mjs",
+    "packs:reefscape": "node game-packs/reefscape-2025/generate.mjs"
   },
   "devDependencies": {
     "prettier": "3.10.0",

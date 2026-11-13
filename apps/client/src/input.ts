@@ -21,6 +21,7 @@ const GAME_KEYS = new Set([
   'KeyE',
   'KeyJ',
   'KeyK',
+  'KeyH',
   'ArrowUp',
   'ArrowDown',
   'ArrowLeft',

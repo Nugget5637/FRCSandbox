@@ -20,6 +20,15 @@ const vec3 = z.tuple([z.number(), z.number(), z.number()]);
 const size3 = z.tuple([positive, positive, positive]);
 
 /**
+ * Orientation as [roll, pitch, yaw] in radians, matching WPILib's Rotation3d:
+ * rotate about the field x axis by roll, then about y by pitch, then about z by
+ * yaw (all fixed field axes). Positive pitch tips +x downward, so a branch
+ * angled 35 degrees upward has pitch -35 degrees, as in WPILib field code.
+ */
+const RotationSchema = vec3;
+export type Rotation = z.output<typeof RotationSchema>;
+
+/**
  * Surface material. When two surfaces touch, the engine combines their values
  * with the geometric mean: friction = sqrt(a.friction * b.friction), and the
  * same for restitution. A piece therefore interacts correctly with carpet,
@@ -55,26 +64,43 @@ export type Alliance = z.output<typeof AllianceSchema>;
 const BoxSchema = z.object({ center: vec3, size: size3 });
 export type Box = z.output<typeof BoxSchema>;
 
+/** A box that may be rotated about its center. `size` is measured in the box's own axes. */
+const OrientedBoxSchema = BoxSchema.extend({ rotation: RotationSchema.optional() });
+export type OrientedBox = z.output<typeof OrientedBoxSchema>;
+
 /**
  * Solid field geometry.
- * - box: an axis-aligned solid box.
+ * - box: a solid box.
  * - ridge: a triangular prism filling the bounding box, with its peak line
  *   running along `ridgeAxis` at the top center. Used for bumps and ramps.
+ * Both may set `rotation` to turn the shape about its center (angled panels,
+ * the reef's branches). Without it the shape is axis-aligned.
  */
 const ObstacleShapeSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('box'), center: vec3, size: size3 }),
+  z.object({
+    kind: z.literal('box'),
+    center: vec3,
+    size: size3,
+    rotation: RotationSchema.optional(),
+  }),
   z.object({
     kind: z.literal('ridge'),
     center: vec3,
     size: size3,
     ridgeAxis: z.enum(['x', 'y']),
+    rotation: RotationSchema.optional(),
   }),
 ]);
 export type ObstacleShape = z.output<typeof ObstacleShapeSchema>;
 
+/**
+ * Piece shapes. A cylinder's axis runs along the piece's own z axis, so an
+ * unrotated cylinder stands upright. Hollow tubes are modeled as solid.
+ */
 const PieceShapeSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('sphere'), radius: positive }),
   z.object({ kind: z.literal('box'), size: size3 }),
+  z.object({ kind: z.literal('cylinder'), radius: positive, length: positive }),
 ]);
 export type PieceShape = z.output<typeof PieceShapeSchema>;
 
@@ -93,10 +119,26 @@ const PieceTypeSchema = z.object({
   rollingResistance: nonNegative.optional(),
 });
 
+/** Where pieces enter the field: a random point in `box`, moving at `velocity`. */
+const PieceExitSchema = z.object({
+  box: BoxSchema,
+  velocity: vec3,
+  /** Orientation of pieces as they appear. Defaults to unrotated. */
+  rotation: RotationSchema.optional(),
+});
+export type PieceExit = z.output<typeof PieceExitSchema>;
+
 const GoalSchema = z.object({
   id,
-  box: BoxSchema,
+  /** Scoring volume. May be rotated, for example along an angled branch. */
+  box: OrientedBoxSchema,
   creditAlliance: AllianceSchema,
+  /**
+   * Most pieces this goal can ever hold, such as 1 for a REEFSCAPE branch.
+   * Once full, pieces pass through the volume without scoring. Omit for no limit.
+   * Recycled pieces are not counted, because they leave the goal.
+   */
+  capacity: z.number().int().positive().optional(),
   /**
    * If set, scored pieces come back onto the field after a delay instead of
    * leaving the match. They appear at a random point in `exit.box` moving at
@@ -105,11 +147,63 @@ const GoalSchema = z.object({
   recycle: z
     .object({
       delaySeconds: nonNegative,
-      exit: z.object({ box: BoxSchema, velocity: vec3 }),
+      exit: PieceExitSchema,
     })
     .optional(),
 });
 export type Goal = z.output<typeof GoalSchema>;
+
+/**
+ * A human player who holds a supply of pieces and feeds them onto the field
+ * (REBUILT outposts, REEFSCAPE coral stations). While the player's feed input
+ * is held, one piece appears at `exit` every `feedSeconds`.
+ */
+const HumanPlayerStationSchema = z.object({
+  id,
+  alliance: AllianceSchema,
+  pieceType: id,
+  /** Pieces the human player holds at the start of the match. */
+  supply: z.number().int().nonnegative(),
+  /** Time for the human player to put one piece onto the field. */
+  feedSeconds: positive,
+  exit: PieceExitSchema,
+});
+export type HumanPlayerStation = z.output<typeof HumanPlayerStationSchema>;
+
+/**
+ * What happens to a piece whose center leaves the field (over a wall, or
+ * through the floor). After `delaySeconds` it returns, resting on the carpet:
+ * - nearestEdge: at the point inside the field nearest to where it would land
+ * - zone: at a random point in the re-entry zone nearest to where it would land
+ * - exitPoint: just inside the field where it crossed the boundary
+ */
+const OutOfBoundsSchema = z.object({
+  mode: z.enum(['nearestEdge', 'zone', 'exitPoint']).default('nearestEdge'),
+  delaySeconds: nonNegative.default(2),
+  /** Re-entry zones for mode "zone". */
+  zones: z.array(z.object({ id, box: BoxSchema })).default([]),
+});
+export type OutOfBounds = z.output<typeof OutOfBoundsSchema>;
+/** Default: a referee walks over and puts the piece back at the nearest edge. */
+export const DEFAULT_OUT_OF_BOUNDS: OutOfBounds = {
+  mode: 'nearestEdge',
+  delaySeconds: 2,
+  zones: [],
+};
+
+const ObstacleSchema = z.object({
+  id,
+  shape: ObstacleShapeSchema,
+  /** Defaults to DEFAULT_STRUCTURE_SURFACE. */
+  surface: SurfaceSchema.optional(),
+  /**
+   * Makes the obstacle one-sided, like a net that stops shots from behind a
+   * goal. It blocks only bodies whose center is on the side `normal` points to;
+   * bodies on the other side pass through it.
+   */
+  oneSided: z.object({ normal: vec3 }).optional(),
+});
+export type Obstacle = z.output<typeof ObstacleSchema>;
 
 const ZoneSchema = z.object({
   id,
@@ -148,23 +242,18 @@ export const GamePackSchema = z
       carpet: CarpetSchema.default(FRC_CARPET),
       /** Material of the perimeter walls. */
       wallSurface: SurfaceSchema.default(DEFAULT_STRUCTURE_SURFACE),
-      obstacles: z
-        .array(
-          z.object({
-            id,
-            shape: ObstacleShapeSchema,
-            /** Defaults to DEFAULT_STRUCTURE_SURFACE. */
-            surface: SurfaceSchema.optional(),
-          }),
-        )
-        .default([]),
+      obstacles: z.array(ObstacleSchema).default([]),
       goals: z.array(GoalSchema).min(1),
       /** Named areas used for display and future rules. They have no physics. */
       zones: z.array(ZoneSchema).default([]),
+      /** How pieces that leave the field come back. Defaults to DEFAULT_OUT_OF_BOUNDS. */
+      outOfBounds: OutOfBoundsSchema.default(DEFAULT_OUT_OF_BOUNDS),
     }),
     pieceTypes: z.array(PieceTypeSchema).min(1),
-    /** Individually placed pieces. */
-    pieceSpawns: z.array(z.object({ type: id, position: vec3 })).default([]),
+    /** Individually placed pieces, optionally rotated (an upright or lying coral). */
+    pieceSpawns: z
+      .array(z.object({ type: id, position: vec3, rotation: RotationSchema.optional() }))
+      .default([]),
     /** Pieces arranged in a grid inside a box, filling layers from the bottom. */
     pieceSpawnAreas: z
       .array(
@@ -180,6 +269,8 @@ export const GamePackSchema = z
       .default([]),
     /** Pieces a robot may hold at the start of the match. */
     preload: z.object({ type: id, maxPerRobot: z.number().int().nonnegative() }).optional(),
+    /** Human players who feed pieces onto the field. */
+    humanPlayerStations: z.array(HumanPlayerStationSchema).default([]),
     match: z.object({
       periods: z.array(z.object({ id, durationSeconds: positive })).min(1),
     }),
@@ -230,6 +321,16 @@ export const GamePackSchema = z
       'spawn area',
     );
     checkUnique(
+      pack.humanPlayerStations.map((s) => s.id),
+      ['humanPlayerStations'],
+      'human player station',
+    );
+    checkUnique(
+      pack.field.outOfBounds.zones.map((z) => z.id),
+      ['field', 'outOfBounds', 'zones'],
+      're-entry zone',
+    );
+    checkUnique(
       pack.match.periods.map((p) => p.id),
       ['match', 'periods'],
       'period',
@@ -269,6 +370,30 @@ export const GamePackSchema = z
     pack.field.goals.forEach((goal, i) => {
       if (goal.recycle && !insideField(goal.recycle.exit.box.center)) {
         issue(['field', 'goals', i, 'recycle', 'exit'], 'recycle exit is outside the field');
+      }
+    });
+
+    pack.humanPlayerStations.forEach((station, i) => {
+      knownPiece(station.pieceType, ['humanPlayerStations', i, 'pieceType']);
+      if (!insideField(station.exit.box.center)) {
+        issue(['humanPlayerStations', i, 'exit'], 'station exit is outside the field');
+      }
+    });
+
+    pack.field.obstacles.forEach((obstacle, i) => {
+      const n = obstacle.oneSided?.normal;
+      if (n && Math.hypot(...n) === 0) {
+        issue(['field', 'obstacles', i, 'oneSided', 'normal'], 'normal must not be zero');
+      }
+    });
+
+    const outOfBounds = pack.field.outOfBounds;
+    if (outOfBounds.mode === 'zone' && outOfBounds.zones.length === 0) {
+      issue(['field', 'outOfBounds', 'zones'], 'mode "zone" needs at least one re-entry zone');
+    }
+    outOfBounds.zones.forEach((zone, i) => {
+      if (!insideField(zone.box.center)) {
+        issue(['field', 'outOfBounds', 'zones', i, 'box'], 're-entry zone is outside the field');
       }
     });
 
@@ -323,9 +448,62 @@ export function pointsFor(rule: ScoringRule, periodId: string): number {
   return rule.points[periodId] ?? 0;
 }
 
-/** True if a point lies inside an axis-aligned box. */
-export function boxContains(box: Box, x: number, y: number, z: number): boolean {
+/** A unit quaternion {x, y, z, w}. */
+export interface Quaternion {
+  x: number;
+  y: number;
+  z: number;
+  w: number;
+}
+
+export const IDENTITY_QUATERNION: Quaternion = Object.freeze({ x: 0, y: 0, z: 0, w: 1 });
+
+/** Converts a pack rotation [roll, pitch, yaw] (WPILib Rotation3d convention) to a quaternion. */
+export function rotationToQuaternion(rotation: Rotation | undefined): Quaternion {
+  if (!rotation) return { ...IDENTITY_QUATERNION };
+  const [roll, pitch, yaw] = rotation;
+  const cr = Math.cos(roll / 2);
+  const sr = Math.sin(roll / 2);
+  const cp = Math.cos(pitch / 2);
+  const sp = Math.sin(pitch / 2);
+  const cy = Math.cos(yaw / 2);
+  const sy = Math.sin(yaw / 2);
+  // q = qz(yaw) * qy(pitch) * qx(roll)
+  return {
+    w: cr * cp * cy + sr * sp * sy,
+    x: sr * cp * cy - cr * sp * sy,
+    y: cr * sp * cy + sr * cp * sy,
+    z: cr * cp * sy - sr * sp * cy,
+  };
+}
+
+/** Rotates vector v by unit quaternion q. */
+export function rotateVector(
+  q: Quaternion,
+  v: readonly [number, number, number],
+): [number, number, number] {
+  const [vx, vy, vz] = v;
+  // t = 2 * cross(q.xyz, v); v' = v + w * t + cross(q.xyz, t)
+  const tx = 2 * (q.y * vz - q.z * vy);
+  const ty = 2 * (q.z * vx - q.x * vz);
+  const tz = 2 * (q.x * vy - q.y * vx);
+  return [
+    vx + q.w * tx + (q.y * tz - q.z * ty),
+    vy + q.w * ty + (q.z * tx - q.x * tz),
+    vz + q.w * tz + (q.x * ty - q.y * tx),
+  ];
+}
+
+/** True if a point lies inside a box, honoring its rotation if it has one. */
+export function boxContains(box: OrientedBox, x: number, y: number, z: number): boolean {
   const [cx, cy, cz] = box.center;
   const [sx, sy, sz] = box.size;
-  return Math.abs(x - cx) <= sx / 2 && Math.abs(y - cy) <= sy / 2 && Math.abs(z - cz) <= sz / 2;
+  let dx = x - cx;
+  let dy = y - cy;
+  let dz = z - cz;
+  if (box.rotation) {
+    const q = rotationToQuaternion(box.rotation);
+    [dx, dy, dz] = rotateVector({ x: -q.x, y: -q.y, z: -q.z, w: q.w }, [dx, dy, dz]);
+  }
+  return Math.abs(dx) <= sx / 2 && Math.abs(dy) <= sy / 2 && Math.abs(dz) <= sz / 2;
 }

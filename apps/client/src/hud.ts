@@ -49,7 +49,8 @@ export class Hud {
     );
 
     // Hub status.
-    if (snapshot.goals.length > 0) {
+    // Only for packs with a few goals that switch on and off (REBUILT hubs).
+    if (snapshot.goals.length > 0 && snapshot.goals.length <= 4) {
       ctx.font = '13px system-ui, sans-serif';
       const text = snapshot.finished
         ? 'match over'
@@ -98,6 +99,12 @@ export class Hud {
         return `${t}  ${event.robotId} picked up piece ${event.pieceId}`;
       case 'pieceReleased':
         return `${t}  ${event.robotId} released piece ${event.pieceId}`;
+      case 'pieceFed':
+        return `${t}  ${event.station} fed piece ${event.pieceId}`;
+      case 'pieceLeftField':
+        return `${t}  piece ${event.pieceId} left the field`;
+      case 'pieceReturned':
+        return `${t}  piece ${event.pieceId} put back by a referee`;
       case 'pieceScored':
         return `${t}  piece ${event.pieceId} ${event.active ? `+${event.points} ${event.alliance}` : 'inactive hub'}`;
     }

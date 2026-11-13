@@ -6,15 +6,17 @@ Based on the 2026 Game Manual with Team Updates through Team Update 22, which FI
 
 ## Sources
 
-| Source                                                                                                                                                                                   | Used for                                                                                          |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| [2026 Game Manual, section 5 (Arena)](https://www.frcmanual.com/2026/arena)                                                                                                              | Field size, hub, bumps, trenches, depot, tower, fuel size and weight                              |
-| [2026 Game Manual, section 6 (Game Details)](https://www.frcmanual.com/2026/game-details)                                                                                                | Match periods (Table 6-2), hub status (Table 6-3), point values (Table 6-4), fuel staging (6.3.4) |
-| [WPILib 2026 AprilTag layout (welded field)](https://github.com/wpilibsuite/allwpilib/blob/v2026.2.2/apriltag/src/main/native/resources/edu/wpi/first/apriltag/2026-rebuilt-welded.json) | Exact field length and width, hub and tower positions                                             |
-| [2026 FRC Inspection Checklist](https://firstfrc.blob.core.windows.net/frc2026/Manual/2026FRCInspectionChecklist.pdf)                                                                    | Robot perimeter (110 in), starting height (30 in), weight (115 lb)                                |
-| [Team 6328 `FieldConstants.java`](https://github.com/Mechanical-Advantage/RobotCode2026Public/blob/main/src/main/java/org/littletonrobotics/frc2026/FieldConstants.java)                 | Hub catcher depth, trench post width and bar depth, tower front-face position, depot position     |
+| Source                                                                                                                                                                                   | Used for                                                                                                                     |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| [2026 Game Manual, section 5 (Arena)](https://www.frcmanual.com/2026/arena)                                                                                                              | Field size, hub, bumps, trenches, depot, tower, fuel size and weight                                                         |
+| [2026 Game Manual, section 6 (Game Details)](https://www.frcmanual.com/2026/game-details)                                                                                                | Match periods (Table 6-2), hub status (Table 6-3), point values (Table 6-4), fuel staging (6.3.4)                            |
+| [WPILib 2026 AprilTag layout (welded field)](https://github.com/wpilibsuite/allwpilib/blob/v2026.2.2/apriltag/src/main/native/resources/edu/wpi/first/apriltag/2026-rebuilt-welded.json) | Exact field length and width, hub and tower positions                                                                        |
+| [2026 FRC Inspection Checklist](https://firstfrc.blob.core.windows.net/frc2026/Manual/2026FRCInspectionChecklist.pdf)                                                                    | Robot perimeter (110 in), starting height (30 in), weight (115 lb)                                                           |
+| [Team 6328 `FieldConstants.java`](https://github.com/Mechanical-Advantage/RobotCode2026Public/blob/main/src/main/java/org/littletonrobotics/frc2026/FieldConstants.java)                 | Hub catcher depth, trench post width and bar depth, tower front-face position, depot position, outpost position              |
+| [2026 Field Dimension Drawings, Hub GE-26300 sheet 4](https://firstfrc.blob.core.windows.net/frc2026/FieldAssets/2026-field-dimension-dwgs.pdf)                                          | Hub net position (10.26 in behind the hub), net top (120.36 in), net width (58.41 in); funnel throat scaled from the drawing |
+| [2026 Game Manual, section 6.8](https://www.frcmanual.com/2026/game-details)                                                                                                             | Fuel that leaves the field goes back "approximately at the point of exit"                                                    |
 
-The official field CAD and dimension drawings were not used. They should be the reference when the CAD pipeline (Milestone 6) is built.
+Apart from the hub sheet above, the official field CAD and dimension drawings were not used. They should be the reference when the CAD pipeline (Milestone 7) is built.
 
 ## Verified against the manual
 
@@ -28,27 +30,31 @@ The official field CAD and dimension drawings were not used. They should be the 
 - Match: AUTO 20 s, TRANSITION 10 s, four 25 s alliance shifts, END GAME 30 s
 - Fuel in an active hub scores 1 point in AUTO and TELEOP; fuel in an inactive hub scores 0
 - Hub shifts follow Table 6-3, including the random tiebreak and the 3-second assessment window after deactivation (tested)
+- Outposts: 31.8 in opening with its bottom 28.1 in up, a 15° chute, 24 fuel per chute (5.9.2, 6.3.4)
 
 ## Assumptions and approximations
 
-| Item               | What the pack does                                                                                 | Why                                                                              |
-| ------------------ | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Hub opening        | Square instead of hexagonal                                                                        | The format only has boxes                                                        |
-| Hub net and funnel | Not modeled                                                                                        | Shots from outside the alliance zone are not blocked                             |
-| Fuel exit          | Fuel reappears 1 s after scoring at the hub's neutral-zone face, moving at 1.5 m/s                 | The manual describes four exits but not timing or speed                          |
-| Trench post depth  | 0.3 m                                                                                              | Not stated in the manual text                                                    |
-| Tower              | Uprights and rungs only                                                                            | Tower base, wall, and supports are omitted                                       |
-| Depot barriers     | Not modeled                                                                                        | 1.125 in rails are too low to matter until wheels exist                          |
-| Fuel surface       | Friction 0.7, restitution 0.35                                                                     | Guesses for the foam itself; tune during playtesting                             |
-| Carpet             | Engine default for the standard FRC carpet: friction 0.8, restitution 0.4, rolling resistance 0.08 | FIRST publishes no measurements; see "Measuring surfaces" in docs/PACK_FORMAT.md |
-| Field type         | Welded field                                                                                       | The AndyMark field has the same critical dimensions                              |
-| `maxExtension`     | 12 in                                                                                              | **Not verified** against R106. Not enforced by the engine yet                    |
+| Item              | What the pack does                                                                                                                                                                              | Why                                                                                          |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Hub opening       | Square instead of hexagonal                                                                                                                                                                     | The format has no hexagonal goal                                                             |
+| Hub funnel panels | Four panels angled about 20° from vertical, from the rim down to a 30.5 in square throat at 56.5 in; the goal is the throat                                                                     | Throat size scaled from the hub drawing, which says "do not scale"                           |
+| Hub net           | One flat one-sided panel from the rim height (72 in) to 120.36 in, 58.41 in wide, 10.26 in behind the hub; stops fuel coming from the neutral zone and lets fuel from the alliance side through | Net bottom scaled from the drawing; the real net also has slanted sides and blocks both ways |
+| Outpost feeding   | The human player feeds one fuel every 0.25 s while feeding is held; fuel leaves at 1.5 m/s down the chute                                                                                       | Chute door timing and fuel speed are not specified                                           |
+| Out of bounds     | Fuel returns at its exit point after 3 s                                                                                                                                                        | The delay ("earliest safe opportunity") is a guess                                           |
+| Fuel exit         | Fuel reappears 1 s after scoring at the hub's neutral-zone face, moving at 1.5 m/s                                                                                                              | The manual describes four exits but not timing or speed                                      |
+| Trench post depth | 0.3 m                                                                                                                                                                                           | Not stated in the manual text                                                                |
+| Tower             | Uprights and rungs only                                                                                                                                                                         | Tower base, wall, and supports are omitted                                                   |
+| Depot barriers    | Not modeled                                                                                                                                                                                     | 1.125 in rails are too low to matter until wheels exist                                      |
+| Fuel surface      | Friction 0.7, restitution 0.35                                                                                                                                                                  | Guesses for the foam itself; tune during playtesting                                         |
+| Carpet            | Engine default for the standard FRC carpet: friction 0.8, restitution 0.4, rolling resistance 0.08                                                                                              | FIRST publishes no measurements; see "Measuring surfaces" in docs/PACK_FORMAT.md             |
+| Field type        | Welded field                                                                                                                                                                                    | The AndyMark field has the same critical dimensions                                          |
+| `maxExtension`    | 12 in                                                                                                                                                                                           | **Not verified** against R106. Not enforced by the engine yet                                |
 
 ## Not modeled yet
 
 - **Tower climbing** (LEVEL 1/2/3 points: 15 in AUTO, 10/20/30 in TELEOP). Needs climbing mechanisms from the bot creator and a robot-state scoring rule.
 - **Ranking points** (ENERGIZED 100 fuel, SUPERCHARGED 360, TRAVERSAL 50 tower points). Needs threshold bonuses in the format.
-- **Human players and outposts** (24 fuel per chute, feeding through the outpost). Needs human-player stations in the format.
+- **Corral delivery**: robots pushing fuel into the corral to give it to the human player. Fed fuel never returns to the outpost.
 - **Fouls**, including scoring restrictions based on where a robot shoots from.
 - **Assessment after the match ends** (fuel landing up to 3 seconds after TELEOP).
 - **Field variance** (staging counts vary by ±24 fuel at events).

@@ -175,6 +175,174 @@
         }
       },
       {
+        "id": "blue-hub-panel-near",
+        "shape": {
+          "kind": "box",
+          "center": [
+            4.1604,
+            4.0345,
+            1.632
+          ],
+          "size": [
+            0.0127,
+            1.0592,
+            0.4186
+          ],
+          "rotation": [
+            0,
+            -0.3467,
+            0
+          ]
+        }
+      },
+      {
+        "id": "red-hub-panel-near",
+        "shape": {
+          "kind": "box",
+          "center": [
+            12.3806,
+            4.0345,
+            1.632
+          ],
+          "size": [
+            0.0127,
+            1.0592,
+            0.4186
+          ],
+          "rotation": [
+            0,
+            -0.3467,
+            3.1416
+          ]
+        }
+      },
+      {
+        "id": "blue-hub-panel-far",
+        "shape": {
+          "kind": "box",
+          "center": [
+            5.0774,
+            4.0345,
+            1.632
+          ],
+          "size": [
+            0.0127,
+            1.0592,
+            0.4186
+          ],
+          "rotation": [
+            0,
+            0.3467,
+            0
+          ]
+        }
+      },
+      {
+        "id": "red-hub-panel-far",
+        "shape": {
+          "kind": "box",
+          "center": [
+            11.4636,
+            4.0345,
+            1.632
+          ],
+          "size": [
+            0.0127,
+            1.0592,
+            0.4186
+          ],
+          "rotation": [
+            0,
+            0.3467,
+            3.1416
+          ]
+        }
+      },
+      {
+        "id": "blue-hub-panel-left",
+        "shape": {
+          "kind": "box",
+          "center": [
+            4.6189,
+            4.493,
+            1.632
+          ],
+          "size": [
+            1.0592,
+            0.0127,
+            0.4186
+          ],
+          "rotation": [
+            -0.3467,
+            0,
+            0
+          ]
+        }
+      },
+      {
+        "id": "red-hub-panel-left",
+        "shape": {
+          "kind": "box",
+          "center": [
+            11.9221,
+            3.576,
+            1.632
+          ],
+          "size": [
+            1.0592,
+            0.0127,
+            0.4186
+          ],
+          "rotation": [
+            -0.3467,
+            0,
+            3.1416
+          ]
+        }
+      },
+      {
+        "id": "blue-hub-panel-right",
+        "shape": {
+          "kind": "box",
+          "center": [
+            4.6189,
+            3.576,
+            1.632
+          ],
+          "size": [
+            1.0592,
+            0.0127,
+            0.4186
+          ],
+          "rotation": [
+            0.3467,
+            0,
+            0
+          ]
+        }
+      },
+      {
+        "id": "red-hub-panel-right",
+        "shape": {
+          "kind": "box",
+          "center": [
+            11.9221,
+            4.493,
+            1.632
+          ],
+          "size": [
+            1.0592,
+            0.0127,
+            0.4186
+          ],
+          "rotation": [
+            0.3467,
+            0,
+            3.1416
+          ]
+        }
+      },
+      {
         "id": "blue-bump-left",
         "shape": {
           "kind": "ridge",
@@ -529,6 +697,60 @@
             0.0422
           ]
         }
+      },
+      {
+        "id": "blue-hub-net",
+        "shape": {
+          "kind": "box",
+          "center": [
+            5.4764,
+            4.0345,
+            2.443
+          ],
+          "size": [
+            0.02,
+            1.4836,
+            1.2283
+          ]
+        },
+        "surface": {
+          "friction": 0.6,
+          "restitution": 0.1
+        },
+        "oneSided": {
+          "normal": [
+            1,
+            0,
+            0
+          ]
+        }
+      },
+      {
+        "id": "red-hub-net",
+        "shape": {
+          "kind": "box",
+          "center": [
+            11.0646,
+            4.0345,
+            2.443
+          ],
+          "size": [
+            0.02,
+            1.4836,
+            1.2283
+          ]
+        },
+        "surface": {
+          "friction": 0.6,
+          "restitution": 0.1
+        },
+        "oneSided": {
+          "normal": [
+            -1,
+            0,
+            0
+          ]
+        }
       }
     ],
     "goals": [
@@ -538,12 +760,12 @@
           "center": [
             4.6189,
             4.0345,
-            1.632
+            1.5113
           ],
           "size": [
-            0.9992,
-            0.9992,
-            0.3937
+            0.7747,
+            0.7747,
+            0.1524
           ]
         },
         "creditAlliance": "blue",
@@ -576,12 +798,12 @@
           "center": [
             11.9221,
             4.0345,
-            1.632
+            1.5113
           ],
           "size": [
-            0.9992,
-            0.9992,
-            0.3937
+            0.7747,
+            0.7747,
+            0.1524
           ]
         },
         "creditAlliance": "red",
@@ -660,7 +882,11 @@
           ]
         }
       }
-    ]
+    ],
+    "outOfBounds": {
+      "mode": "exitPoint",
+      "delaySeconds": 3
+    }
   },
   "pieceTypes": [
     {
@@ -735,6 +961,60 @@
     "type": "fuel",
     "maxPerRobot": 8
   },
+  "humanPlayerStations": [
+    {
+      "id": "blue-outpost",
+      "alliance": "blue",
+      "pieceType": "fuel",
+      "supply": 24,
+      "feedSeconds": 0.25,
+      "exit": {
+        "box": {
+          "center": [
+            0.1251,
+            0.666,
+            0.8026
+          ],
+          "size": [
+            0.02,
+            0.6576,
+            0.02
+          ]
+        },
+        "velocity": [
+          1.4489,
+          0,
+          -0.3882
+        ]
+      }
+    },
+    {
+      "id": "red-outpost",
+      "alliance": "red",
+      "pieceType": "fuel",
+      "supply": 24,
+      "feedSeconds": 0.25,
+      "exit": {
+        "box": {
+          "center": [
+            16.4159,
+            7.403,
+            0.8026
+          ],
+          "size": [
+            0.02,
+            0.6576,
+            0.02
+          ]
+        },
+        "velocity": [
+          -1.4489,
+          0,
+          -0.3882
+        ]
+      }
+    }
+  ],
   "match": {
     "periods": [
       {

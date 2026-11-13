@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { createSimulation, initPhysics, loadGamePack, type RobotEntry } from '@frcsandbox/sim';
 import rebuilt from '../../../../game-packs/rebuilt-2026/pack.json';
+import reefscape from '../../../../game-packs/reefscape-2025/pack.json';
 import { FieldRenderer } from './field-renderer';
 import { CAMERA_MODES, DriverCameras } from './cameras';
 
@@ -131,6 +132,23 @@ describe('DriverCameras', () => {
 
     expect(zoomedIn).toBeLessThan(pulledBack); // ended lower (zoomed in)
     expect(Math.abs(justAfter - pulledBack)).toBeLessThan(Math.abs(zoomedIn - justAfter)); // eased, not instant
+    sim.dispose();
+  });
+});
+
+describe('FieldRenderer with REEFSCAPE', () => {
+  it('draws one instanced mesh per piece type and rotates the reef branches', async () => {
+    const reef = loadGamePack(reefscape);
+    const field = new FieldRenderer(reef);
+    const sim = await createSimulation({ pack: reef, robots: [], seed: 1 });
+    for (let i = 0; i < 10; i++) sim.step();
+    field.update(sim.snapshot());
+    const instanced = field.scene.children.filter(
+      (c) => (c as { isInstancedMesh?: boolean }).isInstancedMesh,
+    ) as unknown as { count: number }[];
+    expect(instanced.map((m) => m.count)).toEqual([6, 18]); // coral, algae on the field
+    const rotated = field.scene.children.filter((c) => c.quaternion.w < 0.999999);
+    expect(rotated.length).toBeGreaterThan(100); // reef hexagons, branches, goals
     sim.dispose();
   });
 });

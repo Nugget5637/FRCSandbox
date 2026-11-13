@@ -160,6 +160,10 @@ Milestone 5 has grown beyond just a second pack: see [milestone-5-scope.md](mile
 | 2026-11-11 | Surfaces combine by geometric mean; carpet adds rolling resistance | Any piece works on any field from its own values; Rapier lacks rolling friction |
 | 2026-11-11 | Three driver cameras; each sets its natural control frame          | Chase is robot-relative; broadcast and driver station are field-relative        |
 | 2026-11-11 | Bundle split into app/three/physics chunks                         | Rapier's WASM is embedded (~4.4 MB); parallel loading beats one blocking file   |
+| 2026-11-13 | Pack rotations use WPILib's `Rotation3d` [roll, pitch, yaw]        | Field constants from team robot code copy over without sign changes             |
+| 2026-11-13 | Human player feeding is a step input, not a schedule               | Matches robot control and keeps replays deterministic                           |
+| 2026-11-13 | Out-of-bounds default: nearest edge after 2 s; packs follow manual | 2025 and 2026 manuals both say "approximately at the point of exit"             |
+| 2026-11-13 | One-sided obstacles use a contact filter on a body's side          | Simple, deterministic, and cheap for a few nets                                 |
 | Open       | License                                                            | Owner to choose before publishing                                               |
 
 ## 10. Legal notes

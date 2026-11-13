@@ -257,3 +257,96 @@ describe('REBUILT in the engine', () => {
     expect(finalX(0.7)).toBeLessThan(arm.center[0]); // 0.7 m is legal but too tall
   });
 });
+
+describe('REBUILT Milestone 5 additions', () => {
+  const net = pack.field.obstacles.find((o) => o.id === 'blue-hub-net')!;
+
+  /** Fires one preloaded fuel flat at net height and returns the lowest x it reached. */
+  function flatShot(startX: number, yaw: number): number {
+    const robot: RobotEntry = {
+      id: 'b1',
+      alliance: 'blue',
+      spec: robotSpec({ release: { height: 2.4, speed: 7, pitch: 0 } }),
+      start: { x: startX, y: hub.box.center[1], yaw },
+      preload: 1,
+    };
+    const sim = new Simulation({ pack, robots: [robot] });
+    sim.step({ b1: input({ release: true }) });
+    const id = sim
+      .snapshot()
+      .pieces.find((p) => p.heldBy === null && p.state === 'field' && p.position!.z > 2)!.id;
+    let minX = Infinity;
+    let maxX = -Infinity;
+    for (let i = 0; i < SIM_HZ; i++) {
+      sim.step();
+      const p = sim.snapshot().pieces[id]!;
+      if (p.position) {
+        minX = Math.min(minX, p.position.x);
+        maxX = Math.max(maxX, p.position.x);
+      }
+    }
+    sim.dispose();
+    return yaw === 0 ? maxX : minX;
+  }
+
+  it('has a one-sided net behind each hub that stops shots from the neutral zone', () => {
+    expect(net.oneSided).toEqual({ normal: [1, 0, 0] });
+    expect(pack.field.obstacles.find((o) => o.id === 'red-hub-net')!.oneSided).toEqual({
+      normal: [-1, 0, 0],
+    });
+    // From the neutral zone, shooting back toward the blue hub: stopped at the net.
+    expect(flatShot(7.5, Math.PI)).toBeGreaterThan(net.shape.center[0]);
+    // From the alliance side the same shot passes the net plane.
+    expect(flatShot(2.5, 0)).toBeGreaterThan(net.shape.center[0] + 0.5);
+  });
+
+  it('has angled funnel panels inside both hub openings', () => {
+    const panels = pack.field.obstacles.filter((o) => o.id.includes('hub-panel'));
+    expect(panels).toHaveLength(8);
+    expect(panels.every((o) => o.shape.rotation !== undefined)).toBe(true);
+  });
+
+  it('gives each outpost 24 fuel that the human player feeds onto the field', () => {
+    expect(pack.humanPlayerStations.map((s) => [s.id, s.supply])).toEqual([
+      ['blue-outpost', 24],
+      ['red-outpost', 24],
+    ]);
+    const sim = new Simulation({ pack, robots: [] });
+    for (let i = 0; i <= SIM_HZ; i++) sim.step({}, { 'blue-outpost': { feed: true } });
+    const fed = sim.getEvents().filter((e) => e.type === 'pieceFed');
+    expect(fed).toHaveLength(4); // one every 0.25 s, the fourth at 1.0 s
+    for (let i = 0; i < SIM_HZ; i++) sim.step();
+    const snap = sim.snapshot();
+    expect(snap.stations[0]).toMatchObject({ id: 'blue-outpost', supply: 20 });
+    for (const e of fed) {
+      const p = snap.pieces[e.type === 'pieceFed' ? e.pieceId : 0]!;
+      expect(p.state).toBe('field');
+      expect(p.position!.x).toBeLessThan(3);
+      expect(p.position!.y).toBeLessThan(1.5);
+    }
+    sim.dispose();
+  });
+
+  it('puts fuel that leaves the field back near its exit point after 3 seconds', () => {
+    expect(pack.field.outOfBounds).toEqual({ mode: 'exitPoint', delaySeconds: 3, zones: [] });
+    const robot: RobotEntry = {
+      id: 'b1',
+      alliance: 'blue',
+      spec: robotSpec({ release: { height: 0.6, speed: 6, pitch: 0.7 } }),
+      start: { x: 1.5, y: 6.5, yaw: Math.PI / 2 },
+      preload: 1,
+    };
+    const sim = new Simulation({ pack, robots: [robot] });
+    sim.step({ b1: input({ release: true }) });
+    for (let i = 0; i < 5 * SIM_HZ; i++) sim.step();
+    const left = sim.getEvents().find((e) => e.type === 'pieceLeftField');
+    const back = sim.getEvents().find((e) => e.type === 'pieceReturned');
+    expect(left).toBeDefined();
+    expect(back!.tick - left!.tick).toBe(3 * SIM_HZ);
+    const piece = sim.snapshot().pieces[left!.type === 'pieceLeftField' ? left!.pieceId : 0]!;
+    expect(piece.state).toBe('field');
+    expect(piece.position!.y).toBeGreaterThan(pack.field.size[1] - 0.3);
+    expect(piece.position!.x).toBeCloseTo(1.5, 0);
+    sim.dispose();
+  });
+});

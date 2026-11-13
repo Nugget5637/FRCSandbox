@@ -7,6 +7,7 @@ import {
   type Simulation,
 } from '@frcsandbox/sim';
 import rebuiltData from '../../../game-packs/rebuilt-2026/pack.json';
+import reefscapeData from '../../../game-packs/reefscape-2025/pack.json';
 import { DriverCameras } from './render/cameras';
 import { FieldRenderer } from './render/field-renderer';
 import { Hud } from './hud';
@@ -29,7 +30,10 @@ const statusEl = document.querySelector<HTMLParagraphElement>('#status');
 if (!app || !glCanvas || !hudCanvas || !statusEl) throw new Error('missing page elements');
 const view: HTMLCanvasElement = glCanvas;
 
-const pack = loadGamePack(rebuiltData);
+// `?pack=reefscape` shows the 2025 field; REBUILT is the default until the
+// game picker arrives in Milestone 6.
+const reefscape = new URLSearchParams(location.search).get('pack') === 'reefscape';
+const pack = loadGamePack(reefscape ? reefscapeData : rebuiltData);
 
 const robot: RobotEntry = {
   id: 'blue-1',
@@ -49,9 +53,14 @@ const robot: RobotEntry = {
     intake: { reach: 0.25, width: 0.6, capacity: 40 },
     release: { height: 0.5, speed: 6.4, pitch: (70 * Math.PI) / 180 },
   },
-  start: { x: 2.0, y: 4.0345, yaw: 0 },
-  preload: 8,
+  // REEFSCAPE robots start between the ROBOT STARTING LINE and the BARGE, facing the reef.
+  start: reefscape ? { x: 7.9, y: 6.0, yaw: Math.PI } : { x: 2.0, y: 4.0345, yaw: 0 },
+  preload: pack.preload?.maxPerRobot ?? 0,
 };
+/** Human player stations the player controls (their own alliance's). */
+const ownStations = pack.humanPlayerStations
+  .filter((s) => s.alliance === robot.alliance)
+  .map((s) => s.id);
 
 const renderer = new THREE.WebGLRenderer({ canvas: glCanvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -61,7 +70,7 @@ const cameras = new DriverCameras(glCanvas.clientWidth / glCanvas.clientHeight);
 const hud = new Hud(
   hudCanvas,
   pack,
-  'WASD drive · Q/E turn · J intake · K shoot · Space pause · R restart',
+  'WASD drive · Q/E turn · J intake · K shoot · H human player feed · Space pause · R restart',
 );
 const input = new InputManager();
 setupTouchControls(app, input);
@@ -97,7 +106,11 @@ function frame(now: number): void {
     while (accumulator >= SIM_STEP_SECONDS) {
       const snapshot = sim.snapshot();
       const control = input.sample(cameras.controlFrame, snapshot.robots[0]?.pose.yaw ?? 0);
-      sim.step({ [robot.id]: control });
+      const feed = input.held('KeyH');
+      sim.step(
+        { [robot.id]: control },
+        Object.fromEntries(ownStations.map((id) => [id, { feed }])),
+      );
       accumulator -= SIM_STEP_SECONDS;
     }
   }
