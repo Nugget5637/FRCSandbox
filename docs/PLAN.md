@@ -130,6 +130,8 @@ Full detail and status live in [PROGRESS.md](../PROGRESS.md) and [milestones.csv
 | 7   | CAD pipeline                       | 2, 5       |
 | 8   | Manual-reading assist              | 2, 5       |
 
+Milestone 4 (bot creator) is built around mechanism categories composed into a game-piece pipeline, so one creator serves both shooters and pick-and-place games. Indexing time is a state machine with per-component timers derived from each mechanism's properties (not soft-body physics, and not fixed per-component constants). See [milestone-4-scope.md](milestone-4-scope.md).
+
 Milestone 6 (application shell) wraps the game in menus, a game picker, website style, and game-like flow. See [milestone-6-scope.md](milestone-6-scope.md). It absorbed the old "polish and kickoff readiness" milestone. The CAD pipeline and manual assist moved to 7 and 8.
 
 Build packs by hand (2 and 5) before building tools that automate pack creation (6 and 7).
